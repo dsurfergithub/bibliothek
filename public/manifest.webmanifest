@@ -1,0 +1,18 @@
+{
+  "name": "Bibliotheke",
+  "short_name": "Bibliotheke",
+  "description": "No guardes contenido. Guarda conocimiento.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#14110f",
+  "theme_color": "#14110f",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
