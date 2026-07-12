@@ -3,6 +3,7 @@ import type { KnowledgeCard } from './domain/types';
 import { getApiKey } from './services/apiKey';
 import { importCards, listCards } from './services/db';
 import { clearSyncHash, decodeSyncPayload, pendingSyncPayload } from './services/sync';
+import { enqueue, mergeQueue } from './services/queue';
 import { Onboarding } from './ui/Onboarding';
 import { Library } from './ui/Library';
 import { ImportView } from './ui/ImportView';
@@ -12,7 +13,7 @@ import { Settings } from './ui/Settings';
 
 type View =
   | { name: 'library' }
-  | { name: 'import' }
+  | { name: 'import'; startTab?: 'instagram' }
   | { name: 'card'; id: string }
   | { name: 'insights' }
   | { name: 'settings' };
@@ -38,18 +39,39 @@ export default function App() {
     // no deja toda la biblioteca visible en la barra de direcciones.
     clearSyncHash();
     decodeSyncPayload(payload)
-      .then(async (incoming) => {
+      .then(async ({ cards, queue }) => {
+        const partes: string[] = [];
+        if (cards.length) partes.push(`${cards.length} ficha${cards.length > 1 ? 's' : ''}`);
+        if (queue.length) partes.push(`${queue.length} reel${queue.length > 1 ? 's' : ''} pendiente${queue.length > 1 ? 's' : ''}`);
+        if (partes.length === 0) return;
         const ok = confirm(
-          `Este enlace contiene ${incoming.length} fichas de otra biblioteca. ¿Importarlas en este dispositivo? (Las fichas repetidas se actualizan, el resto se conserva.)`
+          `Este enlace trae ${partes.join(' y ')} de otro dispositivo. ¿Importarlos aquí? (Las fichas repetidas se actualizan, el resto se conserva.)`
         );
         if (!ok) return;
-        await importCards(incoming);
+        if (cards.length) await importCards(cards);
+        if (queue.length) mergeQueue(queue);
         refresh();
+        if (queue.length) setView({ name: 'import', startTab: 'instagram' });
       })
       .catch(() => {
         alert('El enlace de sincronización no es válido o está incompleto.');
       });
   }, [refresh]);
+
+  // ¿Nos han compartido un reel desde Instagram (share_target del PWA)?
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const shared = [params.get('share_url'), params.get('share_text'), params.get('share_title')]
+      .filter(Boolean)
+      .join(' ');
+    if (!shared) return;
+    history.replaceState(null, '', location.pathname);
+    const added = enqueue(shared);
+    setView({ name: 'import', startTab: 'instagram' });
+    if (!added) {
+      setTimeout(() => alert('No se encontró un reel de Instagram en lo compartido (o ya estaba en la cola).'), 0);
+    }
+  }, []);
 
   if (!hasKey) {
     return <Onboarding onDone={() => setHasKey(true)} />;
@@ -78,10 +100,12 @@ export default function App() {
         )}
         {view.name === 'import' && (
           <ImportView
+            startTab={view.startTab}
             onSaved={(card) => {
               refresh();
               setView({ name: 'card', id: card.id });
             }}
+            onBatchDone={refresh}
           />
         )}
         {view.name === 'card' && openCard && (

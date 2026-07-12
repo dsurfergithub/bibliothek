@@ -4,6 +4,15 @@
   "description": "No guardes contenido. Guarda conocimiento.",
   "start_url": "/",
   "display": "standalone",
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "params": {
+      "title": "share_title",
+      "text": "share_text",
+      "url": "share_url"
+    }
+  },
   "background_color": "#14110f",
   "theme_color": "#14110f",
   "lang": "es",

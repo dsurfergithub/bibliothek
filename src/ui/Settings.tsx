@@ -3,6 +3,7 @@ import { getApiKey, getModel, MODELS, setApiKey, setModel, validateApiKey } from
 import { clearAll, importCards, listCards } from '../services/db';
 import { downloadText } from '../services/exporters';
 import { buildSyncLink } from '../services/sync';
+import { listQueue } from '../services/queue';
 import type { KnowledgeCard } from '../domain/types';
 
 export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void }) {
@@ -59,8 +60,8 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
     setLinkOut(null);
     try {
       const cards = await listCards();
-      if (cards.length === 0) {
-        setMsg({ kind: 'error', text: 'La biblioteca está vacía: no hay nada que sincronizar.' });
+      if (cards.length === 0 && listQueue().length === 0) {
+        setMsg({ kind: 'error', text: 'No hay fichas ni reels en cola: no hay nada que sincronizar.' });
         return;
       }
       const link = await buildSyncLink(cards);
@@ -76,11 +77,16 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
         await navigator.share({ title: 'Bibliotheke', url: link }).catch(() => {});
         return;
       }
+      const nReels = listQueue().length;
+      const resumen = [
+        cards.length ? `${cards.length} fichas` : '',
+        nReels ? `${nReels} reels en cola` : '',
+      ].filter(Boolean).join(' + ');
       try {
         await navigator.clipboard.writeText(link);
         setMsg({
           kind: 'ok',
-          text: `Enlace copiado (${cards.length} fichas). Ábrelo en el otro dispositivo para importarlas.`,
+          text: `Enlace copiado (${resumen}). Ábrelo en el otro dispositivo para importarlo.`,
         });
       } catch {
         // Sin permiso de portapapeles: mostramos el enlace para copiarlo a mano.
