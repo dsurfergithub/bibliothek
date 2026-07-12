@@ -56,10 +56,12 @@ export async function analyze(
   const analysis = JSON.parse(raw) as CardAnalysis;
 
   onStage('guardando');
+  const now = Date.now();
   return {
     ...analysis,
     id: crypto.randomUUID(),
-    createdAt: Date.now(),
+    createdAt: now,
+    updatedAt: now,
     fuente,
     notas: '',
   };

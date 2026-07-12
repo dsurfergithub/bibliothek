@@ -17,8 +17,11 @@ function db(): Promise<IDBPDatabase> {
   return dbPromise;
 }
 
+/** Marca de tiempo para decidir "gana la más reciente" al fundir importaciones. */
+const stamp = (c: KnowledgeCard) => c.updatedAt ?? c.createdAt ?? 0;
+
 export async function saveCard(card: KnowledgeCard): Promise<void> {
-  await (await db()).put(STORE, card);
+  await (await db()).put(STORE, { ...card, updatedAt: Date.now() });
 }
 
 export async function getCard(id: string): Promise<KnowledgeCard | undefined> {
@@ -38,14 +41,25 @@ export async function clearAll(): Promise<void> {
   await (await db()).clear(STORE);
 }
 
+/**
+ * Funde una lista de fichas (de una copia de seguridad o de otro dispositivo)
+ * con la biblioteca local: añade las nuevas y, si una ficha ya existe, se queda
+ * con la versión más reciente (por `updatedAt`). Nunca borra. Devuelve cuántas
+ * se han añadido o actualizado.
+ */
 export async function importCards(cards: KnowledgeCard[]): Promise<number> {
   const database = await db();
   const tx = database.transaction(STORE, 'readwrite');
+  let n = 0;
   for (const card of cards) {
     if (card && typeof card.id === 'string' && typeof card.titulo === 'string') {
-      tx.store.put(card);
+      const existing = (await tx.store.get(card.id)) as KnowledgeCard | undefined;
+      if (!existing || stamp(card) >= stamp(existing)) {
+        tx.store.put(card);
+        n++;
+      }
     }
   }
   await tx.done;
-  return cards.length;
+  return n;
 }

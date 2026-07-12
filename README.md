@@ -27,7 +27,16 @@ Biblioteca local buscable → exporta a Markdown (Obsidian) o JSON
 ## Privacidad por diseño
 
 - **Tu API key, tu cuota**: la app pide tu clave de Gemini al iniciarse ([consíguela gratis aquí](https://aistudio.google.com/apikey)). Se guarda solo en tu dispositivo y solo viaja a la API de Google. No hay backend, no hay cuentas, no hay claves embebidas.
-- **Tus datos, tu dispositivo**: la biblioteca vive en IndexedDB local. Exporta/importa un JSON cuando quieras.
+- **Tus datos, tu dispositivo**: la biblioteca vive en IndexedDB local. Ningún dato sale de tu dispositivo salvo que tú lo lleves con un enlace o una copia de seguridad.
+
+## Pasar tus fichas entre móvil y PC
+
+El flujo típico: capturas reels en el móvil, los procesas en el PC (donde vive el companion) y llevas las fichas extraídas de vuelta al móvil. Dos formas, ambas en **Ajustes**, **100% locales y aditivas** (funden sin borrar nada de lo que ya haya):
+
+1. **Enlace** — genera un enlace que lleva dentro toda tu biblioteca **y la cola de reels** (comprimida, sin la API key, en el fragmento `#…` que nunca sale del dispositivo). Ábrelo en el otro dispositivo y se cargan ahí. Ideal para el traspaso rápido PC↔móvil sin tocar archivos.
+2. **Copia de seguridad (archivo `.json`)** — descarga un archivo con **fichas + cola** y guárdalo como respaldo (recomendado sobre todo en el móvil, donde el navegador puede vaciar el almacenamiento tras días sin abrir la app). «Cargar copia» la restaura fundiéndola con lo que tengas.
+
+Al fundir, si una ficha ya existe se conserva la **versión más reciente** (por fecha de edición); la cola se deduplica por reel.
 
 ## Desarrollo
 
@@ -40,7 +49,7 @@ npm run preview  # servir el build
 
 Stack: **React 19 + TypeScript + Vite**, `@google/genai` (SDK oficial de Gemini), `idb` (IndexedDB) y PWA instalable (manifest + service worker). Sin más dependencias.
 
-Despliegue: es un sitio 100% estático — sirve `dist/` en Vercel, Netlify, GitHub Pages o cualquier hosting.
+Despliegue: es un sitio 100% estático — sirve `dist/` en Vercel, Netlify, GitHub Pages o cualquier hosting. Sin backend.
 
 ## Arquitectura
 

@@ -1,5 +1,5 @@
 /* Bibliotheke service worker: app-shell cache para uso offline de la biblioteca. */
-const CACHE = 'bibliotheke-v1';
+const CACHE = 'bibliotheke-v2';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (event) => {

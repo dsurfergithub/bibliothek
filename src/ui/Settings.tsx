@@ -3,7 +3,7 @@ import { getApiKey, getModel, MODELS, setApiKey, setModel, validateApiKey } from
 import { clearAll, importCards, listCards } from '../services/db';
 import { downloadText } from '../services/exporters';
 import { buildSyncLink } from '../services/sync';
-import { listQueue } from '../services/queue';
+import { listQueue, mergeQueue } from '../services/queue';
 import type { KnowledgeCard } from '../domain/types';
 
 export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void }) {
@@ -32,36 +32,43 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
     }
   }
 
+  /** Descarga una copia de seguridad completa: fichas + cola de reels pendientes. */
   async function exportLibrary() {
     const cards = await listCards();
+    const queue = listQueue();
     downloadText(
-      `bibliotheke-export-${new Date().toISOString().slice(0, 10)}.json`,
-      JSON.stringify({ app: 'bibliotheke', version: 1, cards }, null, 2),
+      `bibliotheke-backup-${new Date().toISOString().slice(0, 10)}.json`,
+      JSON.stringify({ app: 'bibliotheke', version: 1, cards, queue }, null, 2),
       'application/json'
     );
+    setMsg({ kind: 'ok', text: 'Copia de seguridad descargada. Guárdala en un sitio seguro.' });
   }
 
+  /** Carga una copia (o la exportación del PC): funde sin borrar nada de lo que ya haya. */
   async function importLibrary(file: File) {
     try {
       const data = JSON.parse(await file.text());
       const cards: KnowledgeCard[] = Array.isArray(data) ? data : data.cards;
       if (!Array.isArray(cards)) throw new Error('formato');
       const n = await importCards(cards);
+      const q = data && Array.isArray(data.queue) ? mergeQueue(data.queue) : 0;
       onLibraryChanged();
-      setMsg({ kind: 'ok', text: `Importadas ${n} fichas.` });
+      const partes = [`${n} ficha${n === 1 ? '' : 's'}`];
+      if (q) partes.push(`${q} reel${q === 1 ? '' : 's'} en cola`);
+      setMsg({ kind: 'ok', text: `Copia cargada: ${partes.join(' y ')}. Nada de lo que ya tenías se ha borrado.` });
     } catch {
-      setMsg({ kind: 'error', text: 'El archivo no es una exportación válida de Bibliotheke.' });
+      setMsg({ kind: 'error', text: 'El archivo no es una copia válida de Bibliotheke.' });
     }
   }
 
-  /** Genera el enlace #sync= con toda la biblioteca y lo copia o comparte. */
+  /** Genera el enlace #sync= con la biblioteca + la cola y lo copia o comparte. */
   async function syncLink(viaShare: boolean) {
     setMsg(null);
     setLinkOut(null);
     try {
       const cards = await listCards();
       if (cards.length === 0 && listQueue().length === 0) {
-        setMsg({ kind: 'error', text: 'No hay fichas ni reels en cola: no hay nada que sincronizar.' });
+        setMsg({ kind: 'error', text: 'No hay fichas ni reels en cola: no hay nada que enviar.' });
         return;
       }
       const link = await buildSyncLink(cards);
@@ -69,7 +76,7 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
       if (link.length > 100_000) {
         setMsg({
           kind: 'error',
-          text: 'La biblioteca es demasiado grande para un enlace. Usa Exportar + Importar con archivo.',
+          text: 'Tu biblioteca es demasiado grande para un enlace. Usa la copia de seguridad (archivo) de abajo.',
         });
         return;
       }
@@ -86,14 +93,14 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
         await navigator.clipboard.writeText(link);
         setMsg({
           kind: 'ok',
-          text: `Enlace copiado (${resumen}). Ábrelo en el otro dispositivo para importarlo.`,
+          text: `Enlace copiado (${resumen}). Ábrelo en el otro dispositivo para cargarlo.`,
         });
       } catch {
         // Sin permiso de portapapeles: mostramos el enlace para copiarlo a mano.
         setLinkOut(link);
       }
     } catch {
-      setMsg({ kind: 'error', text: 'No se pudo generar el enlace de sincronización.' });
+      setMsg({ kind: 'error', text: 'No se pudo generar el enlace.' });
     }
   }
 
@@ -151,15 +158,16 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
       </div>
 
       <div className="settings-section card">
-        <h2>Usar en móvil y PC</h2>
+        <h2>Pasar tus fichas al móvil (enlace)</h2>
         <p className="hint">
-          Genera un enlace que contiene toda tu biblioteca (comprimida, sin la API key) y ábrelo en
-          el otro dispositivo: las fichas se importan ahí. Envíatelo por WhatsApp, Telegram o email.
-          No es sincronización en vivo — repite cuando quieras actualizar el otro dispositivo. La
-          API key hay que ponerla en cada dispositivo.
+          La forma rápida de llevar las fichas que extraes en el PC al móvil (o al revés): genera un
+          enlace que lleva dentro toda tu biblioteca <strong>y la cola de reels</strong>, comprimida y
+          sin la API key. Ábrelo en el otro dispositivo y se cargan ahí — <strong>fundiéndose</strong>{' '}
+          con lo que ya tengas, sin borrar nada. Envíatelo por WhatsApp, Telegram o email. Repite
+          cuando quieras volver a pasar novedades.
         </p>
         <div className="settings-row" style={{ marginTop: 10 }}>
-          <button className="btn" onClick={() => syncLink(false)}>🔗 Copiar enlace de sincronización</button>
+          <button className="btn" onClick={() => syncLink(false)}>🔗 Copiar enlace</button>
           {'share' in navigator && (
             <button className="btn" onClick={() => syncLink(true)}>📤 Enviar a otro dispositivo</button>
           )}
@@ -179,15 +187,17 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
       </div>
 
       <div className="settings-section card">
-        <h2>Tus datos</h2>
+        <h2>Copia de seguridad</h2>
         <p className="hint">
-          Toda la biblioteca vive en este dispositivo (IndexedDB). Exporta un JSON como copia de
-          seguridad o para moverla a otro dispositivo.
+          Tu biblioteca vive solo en este dispositivo (IndexedDB). Descarga de vez en cuando una copia
+          en archivo <code>.json</code> — sobre todo en el móvil, donde el navegador puede vaciar el
+          almacenamiento si pasas días sin abrir la app. La copia incluye <strong>fichas + cola de
+          reels</strong>. Para restaurarla (o cargar la copia del PC), pulsa «Cargar copia»: se funde
+          sin borrar lo que ya tengas.
         </p>
         <div className="settings-row" style={{ marginTop: 10 }}>
-          <button className="btn" onClick={exportLibrary}>⬇️ Exportar biblioteca</button>
-          <button className="btn" onClick={() => importInput.current?.click()}>⬆️ Importar</button>
-          <button className="btn danger" onClick={wipe}>Borrar todo</button>
+          <button className="btn" onClick={exportLibrary}>⬇️ Descargar copia de seguridad</button>
+          <button className="btn" onClick={() => importInput.current?.click()}>⬆️ Cargar copia</button>
           <input
             ref={importInput}
             type="file"
@@ -199,6 +209,9 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
               e.target.value = '';
             }}
           />
+        </div>
+        <div className="settings-row" style={{ marginTop: 14 }}>
+          <button className="btn danger" onClick={wipe}>Borrar toda la biblioteca de este dispositivo</button>
         </div>
       </div>
 

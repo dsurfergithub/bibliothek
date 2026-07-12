@@ -73,6 +73,12 @@ export interface CardAnalysis {
 export interface KnowledgeCard extends CardAnalysis {
   id: string;
   createdAt: number;
+  /**
+   * Última modificación (ms epoch). Se usa para fundir cambios entre
+   * dispositivos con "gana el más reciente". Las fichas antiguas sin este
+   * campo caen a `createdAt`.
+   */
+  updatedAt?: number;
   fuente: SourceRef;
   /** Notas personales del usuario, editables. */
   notas: string;
