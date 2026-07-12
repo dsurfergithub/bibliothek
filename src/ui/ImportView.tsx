@@ -1,33 +1,51 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { analyze, humanizeError, STAGE_LABELS, type AnalysisInput, type Stage } from '../services/analyzer';
 import { getApiKey, getModel } from '../services/apiKey';
+import { companionOnline } from '../services/companion';
 import { saveCard } from '../services/db';
 import type { KnowledgeCard } from '../domain/types';
 
-type Mode = 'video' | 'youtube' | 'texto';
+type Mode = 'video' | 'youtube' | 'instagram' | 'texto';
 
-const STAGE_ORDER: Stage[] = ['preparando', 'subiendo', 'procesando', 'analizando', 'guardando'];
+const STAGE_ORDER: Stage[] = ['preparando', 'descargando', 'subiendo', 'procesando', 'analizando', 'guardando'];
+
+const IG_URL = /^https?:\/\/(www\.)?instagram\.com\/([\w.]+\/)?(reel|reels|p|tv)\//;
 
 export function ImportView({ onSaved }: { onSaved: (card: KnowledgeCard) => void }) {
   const [mode, setMode] = useState<Mode>('video');
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState('');
+  const [igUrl, setIgUrl] = useState('');
   const [text, setText] = useState('');
   const [stage, setStage] = useState<Stage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
+  /** null = comprobando; luego true/false según responda el compañero local. */
+  const [companion, setCompanion] = useState<boolean | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const busy = stage !== null;
+
+  useEffect(() => {
+    if (mode !== 'instagram') return;
+    setCompanion(null);
+    let alive = true;
+    companionOnline().then((ok) => alive && setCompanion(ok));
+    return () => {
+      alive = false;
+    };
+  }, [mode]);
 
   const input: AnalysisInput | null =
     mode === 'video' && file
       ? { kind: 'video', file }
       : mode === 'youtube' && /^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//.test(url.trim())
         ? { kind: 'youtube', url }
-        : mode === 'texto' && text.trim().length > 40
-          ? { kind: 'texto', text }
-          : null;
+        : mode === 'instagram' && companion === true && IG_URL.test(igUrl.trim())
+          ? { kind: 'instagram', url: igUrl }
+          : mode === 'texto' && text.trim().length > 40
+            ? { kind: 'texto', text }
+            : null;
 
   async function run() {
     if (!input) return;
@@ -45,10 +63,13 @@ export function ImportView({ onSaved }: { onSaved: (card: KnowledgeCard) => void
     }
   }
 
-  // Etapas visibles según el tipo de fuente (subir/procesar solo aplica a vídeo grande).
-  const visibleStages = STAGE_ORDER.filter(
-    (s) => mode === 'video' || (s !== 'subiendo' && s !== 'procesando')
-  );
+  // Etapas visibles según el tipo de fuente: descargar solo aplica a Instagram;
+  // subir/procesar solo a vídeos (locales o descargados).
+  const visibleStages = STAGE_ORDER.filter((s) => {
+    if (s === 'descargando') return mode === 'instagram';
+    if (s === 'subiendo' || s === 'procesando') return mode === 'video' || mode === 'instagram';
+    return true;
+  });
 
   if (busy) {
     const currentIdx = visibleStages.indexOf(stage!);
@@ -75,8 +96,9 @@ export function ImportView({ onSaved }: { onSaved: (card: KnowledgeCard) => void
       <div className="segmented">
         {(
           [
-            ['video', '🎞️ Reel / vídeo'],
+            ['video', '🎞️ Vídeo'],
             ['youtube', '▶️ YouTube'],
+            ['instagram', '📸 Instagram'],
             ['texto', '📄 Texto'],
           ] as [Mode, string][]
         ).map(([m, label]) => (
@@ -122,8 +144,8 @@ export function ImportView({ onSaved }: { onSaved: (card: KnowledgeCard) => void
             />
           </div>
           <p className="hint" style={{ marginTop: 10 }}>
-            Instagram no permite descargar Reels desde otras apps: guarda el vídeo en tu galería
-            (o usa el archivo original si es tuyo) y súbelo aquí. Para YouTube basta con la URL.
+            Para cualquier vídeo que ya tengas en el equipo. Si es un Reel de Instagram, usa la
+            pestaña 📸 Instagram y pega la URL directamente; para YouTube basta con la URL.
           </p>
         </>
       )}
@@ -141,6 +163,46 @@ export function ImportView({ onSaved }: { onSaved: (card: KnowledgeCard) => void
           <p className="hint" style={{ marginTop: 8 }}>
             Gemini procesa la URL directamente: no hace falta descargar nada.
           </p>
+        </div>
+      )}
+
+      {mode === 'instagram' && (
+        <div className="field">
+          <label>URL del Reel de Instagram</label>
+          <input
+            className="input"
+            type="url"
+            placeholder="https://www.instagram.com/reel/…"
+            value={igUrl}
+            onChange={(e) => setIgUrl(e.target.value)}
+          />
+          {companion === true && (
+            <p className="hint" style={{ marginTop: 8 }}>
+              ✅ Compañero local detectado: pega la URL y el reel se descarga y analiza solo.
+            </p>
+          )}
+          {companion === false && (
+            <div className="error-box" style={{ marginTop: 8 }}>
+              El compañero local no está en marcha. Arráncalo con doble clic en{' '}
+              <code>companion\start.cmd</code> (dentro de la carpeta del proyecto) y{' '}
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setCompanion(null);
+                  companionOnline().then(setCompanion);
+                }}
+              >
+                vuelve a comprobar
+              </a>
+              .
+            </div>
+          )}
+          {companion === null && (
+            <p className="hint" style={{ marginTop: 8 }}>
+              Buscando el compañero local…
+            </p>
+          )}
         </div>
       )}
 

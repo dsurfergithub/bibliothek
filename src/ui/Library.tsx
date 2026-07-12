@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { KnowledgeCard } from '../domain/types';
 
-const SOURCE_ICON: Record<string, string> = { video: '🎞️', youtube: '▶️', texto: '📄' };
+const SOURCE_ICON: Record<string, string> = { video: '🎞️', youtube: '▶️', instagram: '📸', texto: '📄' };
 
 function matches(card: KnowledgeCard, q: string): boolean {
   const haystack = [

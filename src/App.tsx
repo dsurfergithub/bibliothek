@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { KnowledgeCard } from './domain/types';
 import { getApiKey } from './services/apiKey';
-import { listCards } from './services/db';
+import { importCards, listCards } from './services/db';
+import { clearSyncHash, decodeSyncPayload, pendingSyncPayload } from './services/sync';
 import { Onboarding } from './ui/Onboarding';
 import { Library } from './ui/Library';
 import { ImportView } from './ui/ImportView';
 import { CardDetail } from './ui/CardDetail';
+import { Insights } from './ui/Insights';
 import { Settings } from './ui/Settings';
 
 type View =
   | { name: 'library' }
   | { name: 'import' }
   | { name: 'card'; id: string }
+  | { name: 'insights' }
   | { name: 'settings' };
 
 export default function App() {
@@ -26,6 +29,27 @@ export default function App() {
   useEffect(() => {
     if (hasKey) refresh();
   }, [hasKey, refresh]);
+
+  // ¿Venimos de un enlace de sincronización de otro dispositivo?
+  useEffect(() => {
+    const payload = pendingSyncPayload();
+    if (!payload) return;
+    // Limpiar el hash YA (síncrono): evita el doble diálogo de StrictMode y
+    // no deja toda la biblioteca visible en la barra de direcciones.
+    clearSyncHash();
+    decodeSyncPayload(payload)
+      .then(async (incoming) => {
+        const ok = confirm(
+          `Este enlace contiene ${incoming.length} fichas de otra biblioteca. ¿Importarlas en este dispositivo? (Las fichas repetidas se actualizan, el resto se conserva.)`
+        );
+        if (!ok) return;
+        await importCards(incoming);
+        refresh();
+      })
+      .catch(() => {
+        alert('El enlace de sincronización no es válido o está incompleto.');
+      });
+  }, [refresh]);
 
   if (!hasKey) {
     return <Onboarding onDone={() => setHasKey(true)} />;
@@ -70,6 +94,7 @@ export default function App() {
             }}
           />
         )}
+        {view.name === 'insights' && <Insights cards={cards} />}
         {view.name === 'settings' && <Settings onLibraryChanged={refresh} />}
       </main>
 
@@ -79,6 +104,9 @@ export default function App() {
         </button>
         <button className={view.name === 'import' ? 'active' : ''} onClick={() => setView({ name: 'import' })}>
           <span className="icon">✨</span>Añadir
+        </button>
+        <button className={view.name === 'insights' ? 'active' : ''} onClick={() => setView({ name: 'insights' })}>
+          <span className="icon">📊</span>Insights
         </button>
         <button className={view.name === 'settings' ? 'active' : ''} onClick={() => setView({ name: 'settings' })}>
           <span className="icon">⚙️</span>Ajustes

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { LIST_SECTIONS, type KnowledgeCard } from '../domain/types';
 import { cardToMarkdown, downloadText, slugify } from '../services/exporters';
 import { deleteCard, saveCard } from '../services/db';
+import { recordShare } from '../services/stats';
 
 export function CardDetail({
   card,
@@ -19,6 +20,7 @@ export function CardDetail({
 
   async function copyMarkdown() {
     await navigator.clipboard.writeText(cardToMarkdown(card));
+    recordShare(card);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -27,9 +29,15 @@ export function CardDetail({
     const md = cardToMarkdown(card);
     if (navigator.share) {
       await navigator.share({ title: card.titulo, text: md }).catch(() => {});
+      recordShare(card);
     } else {
       await copyMarkdown();
     }
+  }
+
+  function download(filename: string, content: string, mime: string) {
+    downloadText(filename, content, mime);
+    recordShare(card);
   }
 
   async function remove() {
@@ -70,13 +78,13 @@ export function CardDetail({
         <button className="btn small" onClick={copyMarkdown}>{copied ? '✓ Copiado' : '📋 Copiar MD'}</button>
         <button
           className="btn small"
-          onClick={() => downloadText(`${slugify(card.titulo)}.md`, cardToMarkdown(card), 'text/markdown')}
+          onClick={() => download(`${slugify(card.titulo)}.md`, cardToMarkdown(card), 'text/markdown')}
         >
           ⬇️ Markdown
         </button>
         <button
           className="btn small"
-          onClick={() => downloadText(`${slugify(card.titulo)}.json`, JSON.stringify(card, null, 2), 'application/json')}
+          onClick={() => download(`${slugify(card.titulo)}.json`, JSON.stringify(card, null, 2), 'application/json')}
         >
           ⬇️ JSON
         </button>
@@ -119,6 +127,13 @@ export function CardDetail({
         <p>{card.resumenDetallado}</p>
         <p className="hint">Lectura: ~{card.tiempoLecturaMin} min · Idioma original: {card.idioma}</p>
       </div>
+
+      {card.analisisCritico?.trim() && (
+        <div className="section">
+          <h2>🧐 Análisis crítico</h2>
+          <p style={{ whiteSpace: 'pre-wrap' }}>{card.analisisCritico}</p>
+        </div>
+      )}
 
       {LIST_SECTIONS.map(({ key, label }) => {
         const items = card[key] as string[];

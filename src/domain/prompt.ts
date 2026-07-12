@@ -26,12 +26,15 @@ REGLAS DE CALIDAD:
 - No inventes nada: si un dato no aparece en el contenido, deja la lista vacía. No rellenes por rellenar.
 - Cada elemento de una lista debe ser autónomo y comprensible sin ver el vídeo.
 - "textoEnPantalla" recoge solo el texto en pantalla que aporte información (no marcas de agua ni el nombre del creador).
-- "acciones" son pasos concretos que el usuario puede ejecutar hoy; "checklist" es la versión marcable y ordenada de esas acciones.
+- "acciones": EXACTAMENTE 5 mini-pasos para APLICAR este conocimiento, ordenados del más fácil al más difícil. Cada paso empieza con un verbo en imperativo, es concreto y tan pequeño que se puede ejecutar hoy en menos de 30 minutos.
+- "checklist" es la versión práctica y marcable de esos 5 pasos: reformula cada uno como una casilla verificable con su criterio de "hecho" incluido (p. ej. "He instalado X y he comprobado que Y funciona").
 - "resumenCorto": máximo 2 frases. "resumenDetallado": 1-2 párrafos con la sustancia completa. "ideaPrincipal": 1 frase.
 - "categoria" es una sola área principal (p. ej. "IA", "Productividad", "Inversión", "Programación", "Negocios", "Salud"). "etiquetas": 3-8, en minúsculas, sin "#".
 - "idioma": código ISO del idioma del contenido (p. ej. "es", "en").
 - "tiempoLecturaMin": minutos estimados de lectura de la ficha.
 - Escribe TODA la ficha en español, salvo nombres propios, prompts literales y citas.
+
+ANÁLISIS CRÍTICO ("analisisCritico"): 1-2 párrafos donde argumentes el conocimiento como un analista escéptico e independiente. Cubre: (a) qué lo respalda — evidencia citada, lógica interna, consenso del campo; (b) qué lo debilita — sesgos o intereses del creador (¿vende algo?), simplificación excesiva, sesgo de supervivencia, moda pasajera; (c) en qué contextos funciona y en cuáles NO aplica; (d) qué matiz o alternativa importante omite el contenido. Argumenta con razones concretas, no con adjetivos. Si el conocimiento es sólido, dilo y explica por qué; si es humo, desmóntalo.
 
 EVALUACIÓN CRÍTICA (sé honesto, no complaciente):
 - utilidad, accionable, originalidad, claridad: puntúa de 1 a 10.

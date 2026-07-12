@@ -2,3 +2,10 @@ node_modules/
 dist/
 *.local
 .DS_Store
+
+# Notas locales de Claude Code (no publicar)
+CLAUDE.md
+
+# Companion: descargas cacheadas y cookies de sesión (¡nunca publicar!)
+companion/downloads/
+companion/cookies.txt

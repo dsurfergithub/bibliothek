@@ -29,6 +29,10 @@ export function cardToMarkdown(card: KnowledgeCard): string {
     '',
   ];
 
+  if (card.analisisCritico?.trim()) {
+    lines.push('## Análisis crítico', '', card.analisisCritico, '');
+  }
+
   for (const { key, label } of LIST_SECTIONS) {
     const items = card[key] as string[];
     if (items.length === 0) continue;

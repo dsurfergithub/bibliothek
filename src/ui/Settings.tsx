@@ -2,12 +2,14 @@ import { useRef, useState } from 'react';
 import { getApiKey, getModel, MODELS, setApiKey, setModel, validateApiKey } from '../services/apiKey';
 import { clearAll, importCards, listCards } from '../services/db';
 import { downloadText } from '../services/exporters';
+import { buildSyncLink } from '../services/sync';
 import type { KnowledgeCard } from '../domain/types';
 
 export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void }) {
   const [key, setKey] = useState('');
   const [model, setModelState] = useState(getModel());
   const [msg, setMsg] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const [linkOut, setLinkOut] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const importInput = useRef<HTMLInputElement>(null);
 
@@ -48,6 +50,44 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
       setMsg({ kind: 'ok', text: `Importadas ${n} fichas.` });
     } catch {
       setMsg({ kind: 'error', text: 'El archivo no es una exportación válida de Bibliotheke.' });
+    }
+  }
+
+  /** Genera el enlace #sync= con toda la biblioteca y lo copia o comparte. */
+  async function syncLink(viaShare: boolean) {
+    setMsg(null);
+    setLinkOut(null);
+    try {
+      const cards = await listCards();
+      if (cards.length === 0) {
+        setMsg({ kind: 'error', text: 'La biblioteca está vacía: no hay nada que sincronizar.' });
+        return;
+      }
+      const link = await buildSyncLink(cards);
+      // Más allá de ~100k caracteres los enlaces se truncan en apps de mensajería.
+      if (link.length > 100_000) {
+        setMsg({
+          kind: 'error',
+          text: 'La biblioteca es demasiado grande para un enlace. Usa Exportar + Importar con archivo.',
+        });
+        return;
+      }
+      if (viaShare && navigator.share) {
+        await navigator.share({ title: 'Bibliotheke', url: link }).catch(() => {});
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(link);
+        setMsg({
+          kind: 'ok',
+          text: `Enlace copiado (${cards.length} fichas). Ábrelo en el otro dispositivo para importarlas.`,
+        });
+      } catch {
+        // Sin permiso de portapapeles: mostramos el enlace para copiarlo a mano.
+        setLinkOut(link);
+      }
+    } catch {
+      setMsg({ kind: 'error', text: 'No se pudo generar el enlace de sincronización.' });
     }
   }
 
@@ -102,6 +142,34 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
             <option key={m.id} value={m.id}>{m.label}</option>
           ))}
         </select>
+      </div>
+
+      <div className="settings-section card">
+        <h2>Usar en móvil y PC</h2>
+        <p className="hint">
+          Genera un enlace que contiene toda tu biblioteca (comprimida, sin la API key) y ábrelo en
+          el otro dispositivo: las fichas se importan ahí. Envíatelo por WhatsApp, Telegram o email.
+          No es sincronización en vivo — repite cuando quieras actualizar el otro dispositivo. La
+          API key hay que ponerla en cada dispositivo.
+        </p>
+        <div className="settings-row" style={{ marginTop: 10 }}>
+          <button className="btn" onClick={() => syncLink(false)}>🔗 Copiar enlace de sincronización</button>
+          {'share' in navigator && (
+            <button className="btn" onClick={() => syncLink(true)}>📤 Enviar a otro dispositivo</button>
+          )}
+        </div>
+        {linkOut && (
+          <div className="field" style={{ marginTop: 12, marginBottom: 0 }}>
+            <label>No se pudo copiar automáticamente — copia el enlace a mano:</label>
+            <textarea
+              className="textarea"
+              style={{ minHeight: 70, fontSize: 12.5 }}
+              readOnly
+              value={linkOut}
+              onFocus={(e) => e.target.select()}
+            />
+          </div>
+        )}
       </div>
 
       <div className="settings-section card">

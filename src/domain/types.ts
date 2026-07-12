@@ -6,7 +6,7 @@
  * Gemini es `CardAnalysis`; la app le añade identidad, fecha y fuente.
  */
 
-export type SourceKind = 'video' | 'youtube' | 'texto';
+export type SourceKind = 'video' | 'youtube' | 'instagram' | 'texto';
 
 export type Nivel = 'básico' | 'intermedio' | 'avanzado';
 
@@ -57,6 +57,8 @@ export interface CardAnalysis {
   metodos: string[];
   conceptos: string[];
   erroresComunes: string[];
+  /** Argumentación crítica del conocimiento: respaldo, debilidades, contextos donde (no) aplica. */
+  analisisCritico: string;
   fuentesDetectadas: string[];
   textoEnPantalla: string[];
   categoria: string;

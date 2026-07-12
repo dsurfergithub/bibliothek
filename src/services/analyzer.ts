@@ -2,6 +2,7 @@ import { GoogleGenAI, createPartFromUri, type Part } from '@google/genai';
 import { ANALYST_PROMPT } from '../domain/prompt';
 import { cardAnalysisSchema } from '../domain/schema';
 import type { CardAnalysis, KnowledgeCard, SourceRef } from '../domain/types';
+import { fetchReel } from './companion';
 
 /**
  * Analizador de contenidos. Arquitectura de conectores: cada tipo de fuente
@@ -11,12 +12,14 @@ import type { CardAnalysis, KnowledgeCard, SourceRef } from '../domain/types';
 export type AnalysisInput =
   | { kind: 'video'; file: File }
   | { kind: 'youtube'; url: string }
+  | { kind: 'instagram'; url: string }
   | { kind: 'texto'; text: string };
 
-export type Stage = 'preparando' | 'subiendo' | 'procesando' | 'analizando' | 'guardando';
+export type Stage = 'preparando' | 'descargando' | 'subiendo' | 'procesando' | 'analizando' | 'guardando';
 
 export const STAGE_LABELS: Record<Stage, string> = {
   preparando: 'Preparando el contenido',
+  descargando: 'Descargando el reel de Instagram',
   subiendo: 'Subiendo el vídeo a Gemini',
   procesando: 'Gemini está procesando el vídeo',
   analizando: 'Extrayendo conocimiento estructurado',
@@ -81,30 +84,47 @@ async function buildParts(
         fuente: { tipo: 'texto', referencia: input.text.slice(0, 80) },
       };
 
-    case 'video': {
-      const { file } = input;
-      const mimeType = file.type || 'video/mp4';
-      const fuente: SourceRef = { tipo: 'video', referencia: file.name };
+    case 'video':
+      return {
+        parts: await videoParts(ai, input.file, onStage),
+        fuente: { tipo: 'video', referencia: input.file.name },
+      };
 
-      if (file.size <= INLINE_LIMIT) {
-        const data = await toBase64(file);
-        return { parts: [{ inlineData: { data, mimeType } }], fuente };
+    case 'instagram': {
+      onStage('descargando');
+      const { file, caption, uploader } = await fetchReel(input.url.trim());
+      const parts = await videoParts(ai, file, onStage);
+      // El caption suele llevar la mitad del valor (enlaces, listas, contexto):
+      // se lo damos a Gemini junto al vídeo.
+      if (caption.trim()) {
+        parts.push({ text: `CAPTION DEL REEL${uploader ? ` (de @${uploader})` : ''}:\n\n${caption}` });
       }
-
-      onStage('subiendo');
-      let uploaded = await ai.files.upload({ file, config: { mimeType } });
-
-      onStage('procesando');
-      while (uploaded.state === 'PROCESSING') {
-        await sleep(2500);
-        uploaded = await ai.files.get({ name: uploaded.name! });
-      }
-      if (uploaded.state === 'FAILED' || !uploaded.uri) {
-        throw new Error('Gemini no pudo procesar el vídeo. Prueba con otro formato (MP4 recomendado).');
-      }
-      return { parts: [createPartFromUri(uploaded.uri, uploaded.mimeType ?? mimeType)], fuente };
+      return { parts, fuente: { tipo: 'instagram', referencia: input.url.trim() } };
     }
   }
+}
+
+/** Convierte un archivo de vídeo en `Part`s: inline si es pequeño, Files API si no. */
+async function videoParts(ai: GoogleGenAI, file: File, onStage: (stage: Stage) => void): Promise<Part[]> {
+  const mimeType = file.type || 'video/mp4';
+
+  if (file.size <= INLINE_LIMIT) {
+    const data = await toBase64(file);
+    return [{ inlineData: { data, mimeType } }];
+  }
+
+  onStage('subiendo');
+  let uploaded = await ai.files.upload({ file, config: { mimeType } });
+
+  onStage('procesando');
+  while (uploaded.state === 'PROCESSING') {
+    await sleep(2500);
+    uploaded = await ai.files.get({ name: uploaded.name! });
+  }
+  if (uploaded.state === 'FAILED' || !uploaded.uri) {
+    throw new Error('Gemini no pudo procesar el vídeo. Prueba con otro formato (MP4 recomendado).');
+  }
+  return [createPartFromUri(uploaded.uri, uploaded.mimeType ?? mimeType)];
 }
 
 function toBase64(file: File): Promise<string> {
