@@ -38,6 +38,7 @@ export function ImportView({
   const [drag, setDrag] = useState(false);
   /** null = comprobando; luego true/false según responda el compañero local. */
   const [companion, setCompanion] = useState<boolean | null>(null);
+  const [rechecking, setRechecking] = useState(false);
   const [queue, setQueue] = useState<PendingReel[]>(() => listQueue());
   const [batch, setBatch] = useState<BatchProgress | null>(null);
   const [batchResult, setBatchResult] = useState<{ ok: number; errors: string[] } | null>(null);
@@ -56,6 +57,15 @@ export function ImportView({
       alive = false;
     };
   }, [mode]);
+
+  /** Vuelve a preguntar al compañero (tras arrancarlo, sin salir de la pestaña). */
+  async function recheckCompanion() {
+    setRechecking(true);
+    setCompanion(null);
+    const ok = await companionOnline();
+    setCompanion(ok);
+    setRechecking(false);
+  }
 
   // Fuentes con botón único inferior (Instagram tiene sus propios botones).
   const input: AnalysisInput | null =
@@ -331,21 +341,56 @@ export function ImportView({
           {companion === false && (
             <>
               <div className="info-box">
-                📱 <strong>Guardado en este dispositivo.</strong> Aquí no se puede descargar de
-                Instagram, así que el reel se guarda en la cola y se procesa en tu PC (con el
-                compañero abierto). Comparte un reel desde Instagram a Bibliotheke, o pega su URL
-                arriba.
+                <strong>Este dispositivo no puede descargar de Instagram por sí solo</strong> (ni el
+                móvil, ni un PC sin el compañero en marcha). Guarda el reel en la cola y procésalo
+                luego en tu PC con el compañero abierto — o descárgalo tú y súbelo en la pestaña
+                🎞️ Vídeo, que no necesita nada extra.
               </div>
               <div className="settings-row" style={{ marginTop: 10 }}>
                 <button className="btn primary" disabled={!igValid} onClick={addToQueue}>
                   ➕ Guardar reel en la cola
                 </button>
+                <button className="btn" onClick={recheckCompanion} disabled={rechecking}>
+                  {rechecking ? 'Comprobando…' : '🔄 Volver a comprobar'}
+                </button>
               </div>
+
+              <details className="companion-help" style={{ marginTop: 12 }}>
+                <summary>¿Qué es el «compañero» y cómo lo activo?</summary>
+                <div className="hint" style={{ marginTop: 8 }}>
+                  <p style={{ marginTop: 0 }}>
+                    Solo hace falta para importar reels de Instagram <strong>pegando su URL</strong>.
+                    Para YouTube (basta la URL), un vídeo que ya tengas, o texto, <strong>no</strong>{' '}
+                    se usa para nada.
+                  </p>
+                  <p>
+                    Instagram no deja descargar desde el navegador (pide login y bloquea el acceso
+                    entre webs). Por eso un programita que corre en tu PC —el «compañero»— usa{' '}
+                    <code>yt-dlp</code> para bajar el vídeo y dárselo a la app. Una web no puede
+                    arrancarlo sola (los navegadores lo prohíben por seguridad), así que lo abres tú
+                    una vez:
+                  </p>
+                  <ol style={{ paddingLeft: 18, margin: '8px 0' }}>
+                    <li>Ten <strong>Node 18+</strong> y <strong>yt-dlp</strong> (<code>pip install yt-dlp</code>).</li>
+                    <li>Doble clic en <code>companion/start.cmd</code> (o <code>node server.mjs</code>) y deja la ventana abierta.</li>
+                    <li>Vuelve aquí y pulsa <strong>🔄 Volver a comprobar</strong>.</li>
+                  </ol>
+                  <p style={{ marginBottom: 0 }}>
+                    Guía completa en la carpeta <code>companion/</code> del proyecto en{' '}
+                    <a href="https://github.com/dsurfergithub/bibliothek" target="_blank" rel="noreferrer">
+                      GitHub
+                    </a>
+                    . ¿No quieres instalar nada? Descarga el reel y súbelo en <strong>🎞️ Vídeo</strong>.
+                  </p>
+                </div>
+              </details>
             </>
           )}
 
           {companion === null && (
-            <p className="hint">Buscando el compañero local…</p>
+            <p className="hint">
+              {rechecking ? 'Comprobando de nuevo…' : 'Buscando el compañero local…'}
+            </p>
           )}
 
           {notice && <div className="ok-box" style={{ marginTop: 12 }}>{notice}</div>}

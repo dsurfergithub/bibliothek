@@ -286,6 +286,28 @@ button { font: inherit; cursor: pointer; }
 }
 .info-box strong { color: var(--text); }
 
+.companion-help {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  background: var(--bg-raised);
+}
+.companion-help > summary {
+  cursor: pointer;
+  color: var(--accent-strong);
+  font-size: 13.5px;
+  font-weight: 600;
+  list-style: none;
+}
+.companion-help > summary::-webkit-details-marker { display: none; }
+.companion-help > summary::before { content: '▸ '; }
+.companion-help[open] > summary::before { content: '▾ '; }
+.companion-help code {
+  background: var(--bg-hover);
+  padding: 1px 5px; border-radius: 4px; font-size: 12.5px;
+}
+.companion-help a { color: var(--accent); }
+
 .queue-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .queue-item {
   display: flex; align-items: center; gap: 10px;

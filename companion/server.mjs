@@ -174,9 +174,18 @@ const server = createServer(async (req, res) => {
   if (origin && ORIGIN_OK.test(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
+    // La app desplegada (HTTPS, origen "público") que llama a este servidor en
+    // localhost (red privada) dispara Private Network Access: el navegador manda
+    // un preflight que EXIGE esta cabecera; sin ella bloquea la petición y el
+    // compañero "no se detecta" aunque esté corriendo. Ver /health más abajo.
+    res.setHeader('Access-Control-Allow-Private-Network', 'true');
   }
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, { 'Access-Control-Allow-Methods': 'GET, OPTIONS' });
+    res.writeHead(204, {
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': req.headers['access-control-request-headers'] || '*',
+      'Access-Control-Max-Age': '86400',
+    });
     return res.end();
   }
 
