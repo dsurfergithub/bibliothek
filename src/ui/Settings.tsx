@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getApiKey, getModel, MODELS, setApiKey, setModel, validateApiKey } from '../services/apiKey';
 import { clearAll, importCards, listCards } from '../services/db';
 import { downloadText } from '../services/exporters';
-import { buildSyncLink } from '../services/sync';
-import { listQueue, mergeQueue } from '../services/queue';
+import { buildSyncLink, changesSince, lastSyncOut, markSyncOut } from '../services/sync';
+import { listQueue, mergeQueue, pruneQueueByCards } from '../services/queue';
 import { importSteps, listSteps } from '../services/steps';
 import type { KnowledgeCard } from '../domain/types';
 import { IconDownload, IconLink, IconShare, IconUpload } from './icons';
@@ -15,6 +15,25 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
   const [linkOut, setLinkOut] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const importInput = useRef<HTMLInputElement>(null);
+  const [ultimoEnvio, setUltimoEnvio] = useState(() => lastSyncOut());
+  const [novedades, setNovedades] = useState<{ cards: number; steps: number } | null>(null);
+
+  // Cuánto habría que mandar si enviases ahora solo lo nuevo.
+  useEffect(() => {
+    if (ultimoEnvio <= 0) {
+      setNovedades(null);
+      return;
+    }
+    let vivo = true;
+    Promise.all([listCards(), listSteps()]).then(([c, st]) => {
+      if (!vivo) return;
+      const d = changesSince(c, st, ultimoEnvio);
+      setNovedades({ cards: d.cards.length, steps: d.steps.length });
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [ultimoEnvio]);
 
   const current = getApiKey();
   const masked = current ? `${current.slice(0, 6)}…${current.slice(-4)}` : '—';
@@ -56,10 +75,12 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
       const n = await importCards(cards);
       const p = await importSteps(data?.steps);
       const q = data && Array.isArray(data.queue) ? mergeQueue(data.queue) : 0;
+      const limpiados = pruneQueueByCards(cards);
       onLibraryChanged();
       const partes = [`${n} ficha${n === 1 ? '' : 's'}`];
       if (p) partes.push(`${p} micropaso${p === 1 ? '' : 's'}`);
       if (q) partes.push(`${q} reel${q === 1 ? '' : 's'} en cola`);
+      if (limpiados) partes.push(`${limpiados} reel${limpiados === 1 ? '' : 's'} ya procesado${limpiados === 1 ? '' : 's'} fuera de la cola`);
       setMsg({ kind: 'ok', text: `Copia cargada: ${partes.join(' y ')}. Nada de lo que ya tenías se ha borrado.` });
     } catch {
       setMsg({ kind: 'error', text: 'El archivo no es una copia válida de Bibliotheke.' });
@@ -67,41 +88,74 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
   }
 
   /** Genera el enlace #sync= con la biblioteca + la cola y lo copia o comparte. */
-  async function syncLink(viaShare: boolean) {
+  /**
+   * Genera el enlace de la biblioteca. Con `incremental`, solo viaja lo cambiado
+   * desde el último envío: es lo que evita que el enlace crezca sin parar hasta
+   * pasarse del límite de las apps de mensajería.
+   */
+  async function syncLink(viaShare: boolean, incremental: boolean) {
     setMsg(null);
     setLinkOut(null);
     try {
+      const desde = incremental ? lastSyncOut() : 0;
       const cards = await listCards();
-      if (cards.length === 0 && listQueue().length === 0) {
-        setMsg({ kind: 'error', text: 'No hay fichas ni reels en cola: no hay nada que enviar.' });
+      const steps = await listSteps();
+      const sel = desde > 0 ? changesSince(cards, steps, desde) : { cards, steps };
+      const nReels = listQueue().length;
+
+      if (sel.cards.length === 0 && sel.steps.length === 0 && nReels === 0) {
+        setMsg({
+          kind: 'error',
+          text:
+            desde > 0
+              ? 'No hay novedades desde tu último envío.'
+              : 'No hay fichas ni reels en cola: no hay nada que enviar.',
+        });
         return;
       }
-      const link = await buildSyncLink(cards, await listSteps());
+
+      const link = await buildSyncLink(cards, steps, desde);
       // Más allá de ~100k caracteres los enlaces se truncan en apps de mensajería.
       if (link.length > 100_000) {
         setMsg({
           kind: 'error',
-          text: 'Tu biblioteca es demasiado grande para un enlace. Usa la copia de seguridad (archivo) de abajo.',
+          text:
+            desde > 0
+              ? 'Incluso enviando solo lo nuevo hay demasiado para un enlace. Usa la copia de seguridad de abajo.'
+              : 'Tu biblioteca entera no cabe en un enlace. Envía solo lo nuevo, o usa la copia de seguridad de abajo.',
         });
         return;
       }
+
+      const ahora = Date.now();
       if (viaShare && navigator.share) {
-        await navigator.share({ title: 'Bibliotheke', url: link }).catch(() => {});
-        return;
+        try {
+          await navigator.share({ title: 'Bibliotheke', url: link });
+          markSyncOut(ahora);
+          setUltimoEnvio(ahora);
+          return;
+        } catch (err) {
+          if ((err as Error)?.name === 'AbortError') return;
+        }
       }
-      const nReels = listQueue().length;
+
       const resumen = [
-        cards.length ? `${cards.length} fichas` : '',
-        nReels ? `${nReels} reels en cola` : '',
-      ].filter(Boolean).join(' + ');
+        sel.cards.length ? `${sel.cards.length} ficha${sel.cards.length === 1 ? '' : 's'}` : '',
+        nReels ? `${nReels} reel${nReels === 1 ? '' : 's'} en cola` : '',
+      ]
+        .filter(Boolean)
+        .join(' + ');
       try {
         await navigator.clipboard.writeText(link);
+        markSyncOut(ahora);
+        setUltimoEnvio(ahora);
         setMsg({
           kind: 'ok',
           text: `Enlace copiado (${resumen}). Ábrelo en el otro dispositivo para cargarlo.`,
         });
       } catch {
-        // Sin permiso de portapapeles: mostramos el enlace para copiarlo a mano.
+        // Sin permiso de portapapeles: se muestra para copiarlo a mano. No se
+        // marca como enviado porque no sabemos si llegó a copiarlo.
         setLinkOut(link);
       }
     } catch {
@@ -166,23 +220,42 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
         <h2>Pasar tus fichas al móvil (enlace)</h2>
         <p className="hint">
           La forma rápida de llevar las fichas que extraes en el PC al móvil (o al revés): genera un
-          enlace que lleva dentro toda tu biblioteca <strong>y la cola de reels</strong>, comprimida y
-          sin la API key. Ábrelo en el otro dispositivo y se cargan ahí — <strong>fundiéndose</strong>{' '}
-          con lo que ya tengas, sin borrar nada. Envíatelo por WhatsApp, Telegram o email. Repite
-          cuando quieras volver a pasar novedades.
+          enlace comprimido y sin la API key. Ábrelo en el otro dispositivo y se carga ahí —{' '}
+          <strong>fundiéndose</strong> con lo que ya tengas, sin borrar nada. Envíatelo por WhatsApp,
+          Telegram o email.
+        </p>
+        <p className="hint" style={{ marginTop: 8 }}>
+          A partir del segundo envío solo viaja <strong>lo que ha cambiado desde el anterior</strong>,
+          así que el enlace se mantiene corto por grande que se haga tu biblioteca. «Copiar todo» está
+          ahí para un dispositivo nuevo o si algún envío se perdió por el camino.
         </p>
         <p className="hint" style={{ marginTop: 8 }}>
           Para mandar <strong>solo reels</strong> del móvil al PC no hace falta esto: en{' '}
           <strong>Añadir → Instagram</strong>, el botón «Enviar al PC» genera un enlace corto que
           lleva únicamente la cola, sin la biblioteca, y por tanto nunca se queda largo.
         </p>
+        {ultimoEnvio > 0 && (
+          <p className="hint" style={{ marginTop: 8 }}>
+            Último envío: {new Date(ultimoEnvio).toLocaleDateString('es', { day: 'numeric', month: 'short' })}
+            {novedades &&
+              ` · ${novedades.cards} ficha${novedades.cards === 1 ? '' : 's'} y ${novedades.steps} paso${
+                novedades.steps === 1 ? '' : 's'
+              } desde entonces`}
+            .
+          </p>
+        )}
         <div className="settings-row" style={{ marginTop: 10 }}>
-          <button className="btn" onClick={() => syncLink(false)}>
-            <IconLink size={16} /> Copiar enlace
+          <button className="btn primary" onClick={() => syncLink(false, true)}>
+            <IconLink size={16} /> {ultimoEnvio > 0 ? 'Copiar lo nuevo' : 'Copiar enlace'}
           </button>
           {'share' in navigator && (
-            <button className="btn" onClick={() => syncLink(true)}>
-              <IconShare size={16} /> Enviar a otro dispositivo
+            <button className="btn" onClick={() => syncLink(true, true)}>
+              <IconShare size={16} /> Enviar
+            </button>
+          )}
+          {ultimoEnvio > 0 && (
+            <button className="btn" onClick={() => syncLink(false, false)}>
+              Copiar todo
             </button>
           )}
         </div>

@@ -10,6 +10,37 @@ import { listQueue, type PendingReel } from './queue';
  */
 
 const PREFIX = '#sync=';
+/** Momento del último envío desde ESTE dispositivo (ms). */
+const LAST_OUT_KEY = 'bibliotheke.lastSyncOut';
+
+/** Fecha de la ficha para decidir si es novedad; las viejas caen a `createdAt`. */
+const stamp = (c: KnowledgeCard) => c.updatedAt ?? c.createdAt ?? 0;
+
+/** 0 si nunca has enviado nada desde este dispositivo. */
+export function lastSyncOut(): number {
+  const n = Number(localStorage.getItem(LAST_OUT_KEY) ?? 0);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+export function markSyncOut(ts = Date.now()): void {
+  localStorage.setItem(LAST_OUT_KEY, String(ts));
+}
+
+/**
+ * Lo que ha cambiado desde `desde`. Es la base del enlace incremental: en vez de
+ * meter la biblioteca entera cada vez —que es lo que acaba haciendo el enlace
+ * demasiado largo— solo viaja lo que el otro dispositivo aún no tiene.
+ */
+export function changesSince(
+  cards: KnowledgeCard[],
+  steps: StepRecord[],
+  desde: number
+): { cards: KnowledgeCard[]; steps: StepRecord[] } {
+  return {
+    cards: cards.filter((c) => stamp(c) > desde),
+    steps: steps.filter((s) => (s.updatedAt ?? 0) > desde),
+  };
+}
 
 export interface SyncPayload {
   cards: KnowledgeCard[];
@@ -18,8 +49,23 @@ export interface SyncPayload {
   steps: StepRecord[];
 }
 
-export async function buildSyncLink(cards: KnowledgeCard[], steps: StepRecord[] = []): Promise<string> {
-  const json = JSON.stringify({ app: 'bibliotheke', version: 2, cards, steps, queue: listQueue() });
+/**
+ * Enlace con la biblioteca. Con `desde > 0` va solo lo cambiado desde esa fecha
+ * (ver `changesSince`); la cola de reels viaja siempre entera porque no pesa.
+ */
+export async function buildSyncLink(
+  cards: KnowledgeCard[],
+  steps: StepRecord[] = [],
+  desde = 0
+): Promise<string> {
+  const sel = desde > 0 ? changesSince(cards, steps, desde) : { cards, steps };
+  const json = JSON.stringify({
+    app: 'bibliotheke',
+    version: 2,
+    cards: sel.cards,
+    steps: sel.steps,
+    queue: listQueue(),
+  });
   const gz = await pipe(new TextEncoder().encode(json), new CompressionStream('gzip'));
   return `${location.origin}${location.pathname}${PREFIX}${toBase64Url(gz)}`;
 }

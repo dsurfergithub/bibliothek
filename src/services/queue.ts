@@ -5,6 +5,8 @@
  * abierto, se procesa por lotes. Captura barata en el móvil, procesado en el PC.
  */
 
+import type { KnowledgeCard } from '../domain/types';
+
 const KEY = 'bibliotheke.queue';
 
 /** reel/reels/p/tv de instagram.com, dentro de un texto cualquiera. */
@@ -107,6 +109,29 @@ export function extractAllInstagramUrls(text: string): string[] {
  */
 export function enqueueMany(text: string): number {
   return mergeQueue(extractAllInstagramUrls(text).map((url) => ({ url, addedAt: Date.now() })));
+}
+
+/**
+ * Quita de la cola los reels que ya se han convertido en ficha. Se llama al
+ * importar fichas de otro dispositivo: si el PC procesó un reel y te devuelves
+ * la ficha al móvil, ese reel ya no tiene nada que hacer esperando allí.
+ *
+ * La correspondencia es por shortcode, que es la identidad estable de un reel
+ * (la `referencia` de una ficha de Instagram es su URL). Devuelve cuántos quitó.
+ */
+export function pruneQueueByCards(cards: KnowledgeCard[]): number {
+  const yaFichados = new Set<string>();
+  for (const c of cards) {
+    if (c?.fuente?.tipo !== 'instagram') continue;
+    const sc = shortcodeOf(c.fuente.referencia ?? '');
+    if (sc) yaFichados.add(sc);
+  }
+  if (yaFichados.size === 0) return 0;
+
+  const antes = listQueue();
+  const despues = antes.filter((r) => !yaFichados.has(shortcodeOf(r.url) ?? ''));
+  if (despues.length !== antes.length) save(despues);
+  return antes.length - despues.length;
 }
 
 /* ---------- enlace SOLO de la cola ---------- */

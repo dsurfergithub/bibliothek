@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { analyze, humanizeError, STAGE_LABELS, type AnalysisInput, type Stage } from '../services/analyzer';
 import { getApiKey, getModel } from '../services/apiKey';
 import { companionOnline } from '../services/companion';
-import { saveCard } from '../services/db';
+import { listCards, saveCard } from '../services/db';
+import { buildSyncLink } from '../services/sync';
+import { listSteps } from '../services/steps';
 import {
   buildQueueLink,
   dequeue,
@@ -53,6 +55,7 @@ export function ImportView({
   const [batch, setBatch] = useState<BatchProgress | null>(null);
   const [batchResult, setBatchResult] = useState<{ ok: number; errors: string[] } | null>(null);
   const [linkOut, setLinkOut] = useState<string | null>(null);
+  const [batchStart, setBatchStart] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const busy = stage !== null;
@@ -146,6 +149,36 @@ export function ImportView({
     refreshQueue();
   }
 
+  /**
+   * PC → móvil, justo después de un lote: enlace con SOLO las fichas que acaban
+   * de salir de él. Así no hay que ir a Ajustes ni mandar la biblioteca entera.
+   * No toca la marca de «último envío» de Ajustes a propósito: este envío es
+   * parcial, y marcarlo dejaría fuera fichas anteriores que aún no has pasado.
+   */
+  async function devolverAlMovil() {
+    setError(null);
+    setLinkOut(null);
+    try {
+      const link = await buildSyncLink(await listCards(), await listSteps(), batchStart);
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: 'Bibliotheke — fichas nuevas', url: link });
+          return;
+        } catch (err) {
+          if ((err as Error)?.name === 'AbortError') return;
+        }
+      }
+      try {
+        await navigator.clipboard.writeText(link);
+        setNotice('Enlace copiado. Ábrelo en el móvil y las fichas nuevas se cargan ahí.');
+      } catch {
+        setLinkOut(link);
+      }
+    } catch {
+      setError('No se pudo generar el enlace de vuelta.');
+    }
+  }
+
   /** Instagram con compañero: procesa toda la cola, uno a uno. */
   async function processQueue() {
     const apiKey = getApiKey();
@@ -155,6 +188,9 @@ export function ImportView({
     setError(null);
     setNotice(null);
     setBatchResult(null);
+    // Marca desde la que se calcula «lo que ha salido de este lote».
+    const inicio = Date.now();
+    setBatchStart(inicio);
     const errors: string[] = [];
     let ok = 0;
     for (let i = 0; i < items.length; i++) {
@@ -439,6 +475,11 @@ Compañero detectado en este equipo: puedes analizar el reel ahora mismo.
                     <li key={i} style={{ fontSize: 13 }}>{e}</li>
                   ))}
                 </ul>
+              )}
+              {batchResult.ok > 0 && (
+                <button className="btn" style={{ marginTop: 10 }} onClick={devolverAlMovil}>
+                  <IconShare size={16} /> Devolver {batchResult.ok} ficha{batchResult.ok === 1 ? '' : 's'} al móvil
+                </button>
               )}
             </div>
           )}

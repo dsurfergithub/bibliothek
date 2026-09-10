@@ -50,7 +50,9 @@ El flujo típico: capturas reels en el móvil, los procesas en el PC (donde vive
 1. **Enlace** — genera un enlace que lleva dentro toda tu biblioteca **y la cola de reels** (comprimida, sin la API key, en el fragmento `#…` que nunca sale del dispositivo). Ábrelo en el otro dispositivo y se cargan ahí. Ideal para el traspaso rápido PC↔móvil sin tocar archivos.
 2. **Copia de seguridad (archivo `.json`)** — descarga un archivo con **fichas + cola** y guárdalo como respaldo (recomendado sobre todo en el móvil, donde el navegador puede vaciar el almacenamiento tras días sin abrir la app). «Cargar copia» la restaura fundiéndola con lo que tengas.
 
-Al fundir, si una ficha ya existe se conserva la **versión más reciente** (por fecha de edición); la cola se deduplica por reel.
+Al fundir, si una ficha ya existe se conserva la **versión más reciente** (por fecha de edición); la cola se deduplica por reel. Además, **los reels que ya se han convertido en ficha desaparecen solos de la cola**: si el PC procesó un reel y la ficha te llega al móvil, deja de esperar allí.
+
+A partir del segundo envío el enlace lleva **solo lo que ha cambiado desde el anterior**, así que se mantiene corto por grande que se haga tu biblioteca; «Copiar todo» sigue ahí para un dispositivo nuevo o si un envío se perdió. Y al terminar de procesar un lote en el PC, la propia pantalla ofrece **«Devolver N fichas al móvil»** con ese enlace ya hecho.
 
 ### Solo los reels: enlace corto
 

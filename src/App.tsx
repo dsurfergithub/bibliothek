@@ -10,6 +10,7 @@ import {
   mergeQueue,
   mergeQueueFromPayload,
   pendingQueuePayload,
+  pruneQueueByCards,
 } from './services/queue';
 import { Onboarding } from './ui/Onboarding';
 import { Library } from './ui/Library';
@@ -50,32 +51,52 @@ export default function App() {
     if (hasKey) void refresh();
   }, [hasKey, refresh]);
 
-  // ¿Venimos de un enlace de sincronización de otro dispositivo?
+  // ¿Venimos de un enlace de sincronización de otro dispositivo? Igual que con
+  // `#reels=`, se escucha `hashchange`: pegar el enlace con la app ya abierta
+  // cambia el fragmento sin recargar, y sin eso no pasaría nada.
   useEffect(() => {
-    const payload = pendingSyncPayload();
-    if (!payload) return;
-    // Limpiar el hash YA (síncrono): evita el doble diálogo de StrictMode y
-    // no deja toda la biblioteca visible en la barra de direcciones.
-    clearSyncHash();
-    decodeSyncPayload(payload)
-      .then(async ({ cards, queue, steps }) => {
-        const partes: string[] = [];
-        if (cards.length) partes.push(`${cards.length} ficha${cards.length > 1 ? 's' : ''}`);
-        if (queue.length) partes.push(`${queue.length} reel${queue.length > 1 ? 's' : ''} pendiente${queue.length > 1 ? 's' : ''}`);
-        if (partes.length === 0) return;
-        const ok = confirm(
-          `Este enlace trae ${partes.join(' y ')} de otro dispositivo. ¿Importarlos aquí? (Las fichas repetidas se actualizan, el resto se conserva.)`
-        );
-        if (!ok) return;
-        if (cards.length) await importCards(cards);
-        if (steps.length) await importSteps(steps);
-        if (queue.length) mergeQueue(queue);
-        void refresh();
-        if (queue.length) setView({ name: 'import', startTab: 'instagram' });
-      })
-      .catch(() => {
-        alert('El enlace de sincronización no es válido o está incompleto.');
-      });
+    function absorberSync() {
+      const payload = pendingSyncPayload();
+      if (!payload) return;
+      // Limpiar el hash YA (síncrono): evita el doble diálogo de StrictMode y
+      // no deja toda la biblioteca visible en la barra de direcciones.
+      clearSyncHash();
+      decodeSyncPayload(payload)
+        .then(async ({ cards, queue, steps }) => {
+          const partes: string[] = [];
+          if (cards.length) partes.push(`${cards.length} ficha${cards.length > 1 ? 's' : ''}`);
+          if (queue.length) partes.push(`${queue.length} reel${queue.length > 1 ? 's' : ''} pendiente${queue.length > 1 ? 's' : ''}`);
+          if (partes.length === 0) return;
+          const ok = confirm(
+            `Este enlace trae ${partes.join(' y ')} de otro dispositivo. ¿Importarlos aquí? (Las fichas repetidas se actualizan, el resto se conserva.)`
+          );
+          if (!ok) return;
+          if (cards.length) await importCards(cards);
+          if (steps.length) await importSteps(steps);
+          if (queue.length) mergeQueue(queue);
+          // Los reels que ya son ficha salen solos de la cola: si el PC lo
+          // procesó y la ficha acaba de llegar, no pinta nada esperando aquí.
+          const limpiados = cards.length ? pruneQueueByCards(cards) : 0;
+          void refresh();
+          if (queue.length || limpiados > 0) {
+            setView({
+              name: 'import',
+              startTab: 'instagram',
+              nonce: Date.now(),
+              aviso:
+                limpiados > 0
+                  ? `${limpiados} reel${limpiados === 1 ? '' : 's'} de la cola ya ${limpiados === 1 ? 'era ficha' : 'eran fichas'}: ${limpiados === 1 ? 'lo he quitado' : 'los he quitado'}.`
+                  : undefined,
+            });
+          }
+        })
+        .catch(() => {
+          alert('El enlace de sincronización no es válido o está incompleto.');
+        });
+    }
+    absorberSync();
+    window.addEventListener('hashchange', absorberSync);
+    return () => window.removeEventListener('hashchange', absorberSync);
   }, [refresh]);
 
   // ¿Venimos de un enlace de reels (#reels=)? Es el traspaso ligero móvil→PC:
