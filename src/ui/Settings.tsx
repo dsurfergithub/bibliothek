@@ -4,6 +4,7 @@ import { clearAll, importCards, listCards } from '../services/db';
 import { downloadText } from '../services/exporters';
 import { buildSyncLink } from '../services/sync';
 import { listQueue, mergeQueue } from '../services/queue';
+import { importSteps, listSteps } from '../services/steps';
 import type { KnowledgeCard } from '../domain/types';
 
 export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void }) {
@@ -35,10 +36,11 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
   /** Descarga una copia de seguridad completa: fichas + cola de reels pendientes. */
   async function exportLibrary() {
     const cards = await listCards();
+    const steps = await listSteps();
     const queue = listQueue();
     downloadText(
       `bibliotheke-backup-${new Date().toISOString().slice(0, 10)}.json`,
-      JSON.stringify({ app: 'bibliotheke', version: 1, cards, queue }, null, 2),
+      JSON.stringify({ app: 'bibliotheke', version: 2, cards, steps, queue }, null, 2),
       'application/json'
     );
     setMsg({ kind: 'ok', text: 'Copia de seguridad descargada. Guárdala en un sitio seguro.' });
@@ -51,9 +53,11 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
       const cards: KnowledgeCard[] = Array.isArray(data) ? data : data.cards;
       if (!Array.isArray(cards)) throw new Error('formato');
       const n = await importCards(cards);
+      const p = await importSteps(data?.steps);
       const q = data && Array.isArray(data.queue) ? mergeQueue(data.queue) : 0;
       onLibraryChanged();
       const partes = [`${n} ficha${n === 1 ? '' : 's'}`];
+      if (p) partes.push(`${p} micropaso${p === 1 ? '' : 's'}`);
       if (q) partes.push(`${q} reel${q === 1 ? '' : 's'} en cola`);
       setMsg({ kind: 'ok', text: `Copia cargada: ${partes.join(' y ')}. Nada de lo que ya tenías se ha borrado.` });
     } catch {
@@ -71,7 +75,7 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
         setMsg({ kind: 'error', text: 'No hay fichas ni reels en cola: no hay nada que enviar.' });
         return;
       }
-      const link = await buildSyncLink(cards);
+      const link = await buildSyncLink(cards, await listSteps());
       // Más allá de ~100k caracteres los enlaces se truncan en apps de mensajería.
       if (link.length > 100_000) {
         setMsg({

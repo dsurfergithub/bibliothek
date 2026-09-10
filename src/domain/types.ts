@@ -84,6 +84,40 @@ export interface KnowledgeCard extends CardAnalysis {
   notas: string;
 }
 
+/**
+ * Un micropaso de una ficha, con su estado de aplicación. Es lo que convierte
+ * la biblioteca en práctica: la ficha dice qué hacer, el `StepRecord` guarda si
+ * llegaste a hacerlo.
+ *
+ * El `id` es determinista (`cardId#indice`) a propósito: así el mismo paso en el
+ * móvil y en el PC es el MISMO registro y el traspaso funde sin duplicar.
+ */
+export type StepState = 'pendiente' | 'hecho' | 'descartado' | 'aplazado';
+
+export interface StepRecord {
+  /** `${cardId}#${indice}`. */
+  id: string;
+  cardId: string;
+  /** Posición en `acciones` (0-4). Como el análisis los ordena de fácil a difícil, el índice ES la dificultad. */
+  indice: number;
+  /** El micropaso, copiado de la ficha. */
+  texto: string;
+  /** La versión marcable con criterio de "hecho" (`checklist[indice]`), si la ficha la trae. */
+  checklist?: string;
+  estado: StepState;
+  createdAt: number;
+  updatedAt: number;
+  /** Cuándo se marcó como hecho. */
+  doneAt?: number;
+  /** Mientras esté en el futuro, el Dado no lo ofrece (estado "aplazado"). */
+  snoozeUntil?: number;
+  /** Veces que el Dado lo ha sacado: evita que salga siempre lo mismo. */
+  ofrecido: number;
+}
+
+/** Claves de la ficha que ya no se pintan como lista suelta: tienen su propio bloque de práctica. */
+export const PRACTICE_KEYS: ReadonlyArray<keyof CardAnalysis> = ['acciones', 'checklist'];
+
 /** Secciones de lista de la ficha, para renderizado y exportación genéricos. */
 export const LIST_SECTIONS: ReadonlyArray<{ key: keyof CardAnalysis; label: string }> = [
   { key: 'aprendizajes', label: 'Aprendizajes' },

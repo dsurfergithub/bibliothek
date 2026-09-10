@@ -5,13 +5,20 @@ import type { KnowledgeCard } from '../domain/types';
 
 const DB_NAME = 'bibliotheke';
 const STORE = 'cards';
+/** Micropasos con su estado de aplicación (ver `services/steps.ts`). */
+export const STEP_STORE = 'steps';
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
-function db(): Promise<IDBPDatabase> {
-  dbPromise ??= openDB(DB_NAME, 1, {
-    upgrade(database) {
-      database.createObjectStore(STORE, { keyPath: 'id' });
+/** Conexión única a IndexedDB, compartida por `db.ts` y `steps.ts`. */
+export function db(): Promise<IDBPDatabase> {
+  dbPromise ??= openDB(DB_NAME, 2, {
+    upgrade(database, oldVersion) {
+      if (oldVersion < 1) database.createObjectStore(STORE, { keyPath: 'id' });
+      if (oldVersion < 2) {
+        const steps = database.createObjectStore(STEP_STORE, { keyPath: 'id' });
+        steps.createIndex('by-card', 'cardId');
+      }
     },
   });
   return dbPromise;
@@ -33,12 +40,19 @@ export async function listCards(): Promise<KnowledgeCard[]> {
   return all.sort((a, b) => b.createdAt - a.createdAt);
 }
 
+/** Borra la ficha y, con ella, sus micropasos: no dejamos pasos huérfanos. */
 export async function deleteCard(id: string): Promise<void> {
-  await (await db()).delete(STORE, id);
+  const database = await db();
+  await database.delete(STORE, id);
+  const tx = database.transaction(STEP_STORE, 'readwrite');
+  for (const key of await tx.store.index('by-card').getAllKeys(id)) tx.store.delete(key);
+  await tx.done;
 }
 
 export async function clearAll(): Promise<void> {
-  await (await db()).clear(STORE);
+  const database = await db();
+  await database.clear(STORE);
+  await database.clear(STEP_STORE);
 }
 
 /**

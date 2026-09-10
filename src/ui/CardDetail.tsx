@@ -1,32 +1,38 @@
 import { useState } from 'react';
-import { LIST_SECTIONS, type KnowledgeCard } from '../domain/types';
+import { LIST_SECTIONS, PRACTICE_KEYS, type KnowledgeCard, type StepRecord } from '../domain/types';
 import { cardToMarkdown, downloadText, slugify } from '../services/exporters';
 import { deleteCard, saveCard } from '../services/db';
 import { recordShare } from '../services/stats';
+import { setStepState, stepsOf } from '../services/steps';
 
 export function CardDetail({
   card,
+  steps,
   onBack,
   onChanged,
+  onStepsChanged,
 }: {
   card: KnowledgeCard;
+  steps: StepRecord[];
   onBack: () => void;
   onChanged: (card: KnowledgeCard | null) => void;
+  onStepsChanged: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [copied, setCopied] = useState(false);
   const e = card.evaluacion;
   const stars = Math.round(e.utilidad / 2);
+  const pasos = stepsOf(steps, card.id);
 
   async function copyMarkdown() {
-    await navigator.clipboard.writeText(cardToMarkdown(card));
+    await navigator.clipboard.writeText(cardToMarkdown(card, pasos));
     recordShare(card);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
 
   async function share() {
-    const md = cardToMarkdown(card);
+    const md = cardToMarkdown(card, pasos);
     if (navigator.share) {
       await navigator.share({ title: card.titulo, text: md }).catch(() => {});
       recordShare(card);
@@ -74,11 +80,19 @@ export function CardDetail({
 
       <div className="detail-idea">{card.ideaPrincipal}</div>
 
+      <PracticeBlock
+        pasos={pasos}
+        onToggle={async (paso) => {
+          await setStepState(paso, paso.estado === 'hecho' ? 'pendiente' : 'hecho');
+          onStepsChanged();
+        }}
+      />
+
       <div className="detail-actions">
         <button className="btn small" onClick={copyMarkdown}>{copied ? '✓ Copiado' : '📋 Copiar MD'}</button>
         <button
           className="btn small"
-          onClick={() => download(`${slugify(card.titulo)}.md`, cardToMarkdown(card), 'text/markdown')}
+          onClick={() => download(`${slugify(card.titulo)}.md`, cardToMarkdown(card, pasos), 'text/markdown')}
         >
           ⬇️ Markdown
         </button>
@@ -136,8 +150,10 @@ export function CardDetail({
       )}
 
       {LIST_SECTIONS.map(({ key, label }) => {
+        // acciones y checklist viven arriba, en el bloque de práctica.
+        if (PRACTICE_KEYS.includes(key)) return null;
         const items = card[key] as string[];
-        if (items.length === 0) return null;
+        if (!items || items.length === 0) return null;
         return (
           <div className="section" key={key}>
             <h2>{label}</h2>
@@ -160,6 +176,56 @@ export function CardDetail({
           <p style={{ whiteSpace: 'pre-wrap' }}>{card.notas}</p>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Los 5 micropasos, marcables. Es el bloque que convierte la ficha en algo que
+ * se hace, no que se lee: por eso va arriba del todo y no enterrado entre las
+ * diecisiete listas del análisis.
+ */
+function PracticeBlock({
+  pasos,
+  onToggle,
+}: {
+  pasos: StepRecord[];
+  onToggle: (paso: StepRecord) => void;
+}) {
+  if (pasos.length === 0) return null;
+  const hechos = pasos.filter((p) => p.estado === 'hecho').length;
+  const completa = hechos >= pasos.length;
+
+  return (
+    <div className="section practice-block">
+      <div className="practice-head">
+        <h2>Aplicar esto</h2>
+        <span className={`prog-label ${completa ? 'full' : ''}`}>
+          {hechos}/{pasos.length}
+        </span>
+      </div>
+      <div className="prog-bar" aria-label={`${hechos} de ${pasos.length} pasos aplicados`}>
+        <span style={{ width: `${(hechos / pasos.length) * 100}%` }} />
+      </div>
+      <ul className="step-list">
+        {pasos.map((paso) => (
+          <li key={paso.id} className={paso.estado}>
+            <button
+              className="step-check"
+              onClick={() => onToggle(paso)}
+              aria-pressed={paso.estado === 'hecho'}
+            >
+              <span className="box" aria-hidden="true">
+                {paso.estado === 'hecho' ? '✓' : paso.estado === 'descartado' ? '×' : ''}
+              </span>
+              <span className="txt">
+                <span className="main">{paso.texto}</span>
+                {paso.checklist && <span className="sub">Hecho cuando: {paso.checklist}</span>}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

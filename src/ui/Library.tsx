@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import type { KnowledgeCard } from '../domain/types';
+import type { KnowledgeCard, StepRecord } from '../domain/types';
+import { phaseOf, progressOf } from '../services/steps';
 
 const SOURCE_ICON: Record<string, string> = { video: '🎞️', youtube: '▶️', instagram: '📸', texto: '📄' };
 
@@ -31,16 +32,19 @@ function matches(card: KnowledgeCard, q: string): boolean {
 
 export function Library({
   cards,
+  steps,
   onOpen,
   onImport,
 }: {
   cards: KnowledgeCard[];
+  steps: StepRecord[];
   onOpen: (id: string) => void;
   onImport: () => void;
 }) {
   const [query, setQuery] = useState('');
   const [categoria, setCategoria] = useState<string | null>(null);
   const [nivel, setNivel] = useState<string | null>(null);
+  const [sinAplicar, setSinAplicar] = useState(false);
 
   const categorias = useMemo(
     () => [...new Set(cards.map((c) => c.categoria).filter(Boolean))].sort(),
@@ -51,7 +55,8 @@ export function Library({
     (c) =>
       (!query.trim() || matches(c, query.trim())) &&
       (!categoria || c.categoria === categoria) &&
-      (!nivel || c.nivel === nivel)
+      (!nivel || c.nivel === nivel) &&
+      (!sinAplicar || phaseOf(steps, c.id) !== 'aplicada')
   );
 
   if (cards.length === 0) {
@@ -82,6 +87,12 @@ export function Library({
       </div>
 
       <div className="filters">
+        <button
+          className={`chip-filter ${sinAplicar ? 'on' : ''}`}
+          onClick={() => setSinAplicar(!sinAplicar)}
+        >
+          ⚡ Sin aplicar
+        </button>
         {categorias.map((cat) => (
           <button
             key={cat}
@@ -110,13 +121,20 @@ export function Library({
 
       {visible.map((card) => {
         const stars = Math.round(card.evaluacion.utilidad / 2);
+        const { hechos, total } = progressOf(steps, card.id);
+        const fase = phaseOf(steps, card.id);
         return (
-          <button key={card.id} className="card-item" onClick={() => onOpen(card.id)}>
+          <button key={card.id} className={`card-item fase-${fase}`} onClick={() => onOpen(card.id)}>
             <h3>
               {SOURCE_ICON[card.fuente.tipo] ?? '📄'} {card.titulo}
             </h3>
             <div className="summary">{card.resumenCorto}</div>
             <div className="meta">
+              {hechos > 0 && (
+                <span className={`chip aplicacion ${fase}`}>
+                  {fase === 'aplicada' ? '✓ Aplicada' : `${hechos}/${total} aplicado`}
+                </span>
+              )}
               <span className="stars">{'★'.repeat(stars)}{'☆'.repeat(5 - stars)}</span>
               {card.categoria && <span className="chip accent">{card.categoria}</span>}
               <span className="chip">{card.nivel}</span>

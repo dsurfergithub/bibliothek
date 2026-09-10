@@ -65,8 +65,8 @@ button { font: inherit; cursor: pointer; }
 
 .tabbar {
   position: fixed; bottom: 0; left: 0; right: 0;
-  display: flex; justify-content: center; gap: 6px;
-  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  display: flex; justify-content: center; gap: 2px;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
   background: color-mix(in srgb, var(--bg-raised) 94%, transparent);
   backdrop-filter: blur(10px);
   border-top: 1px solid var(--border);
@@ -75,10 +75,11 @@ button { font: inherit; cursor: pointer; }
 .tabbar button {
   flex: 1; max-width: 200px;
   background: none; border: none; color: var(--text-dim);
-  padding: 8px 10px; border-radius: var(--radius-sm);
-  font-size: 13.5px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 7px 4px; border-radius: var(--radius-sm);
+  font-size: 11.5px; letter-spacing: -0.1px; white-space: nowrap;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
 }
-.tabbar button .icon { font-size: 19px; }
+.tabbar button .icon { font-size: 19px; line-height: 1; }
 .tabbar button.active { color: var(--accent-strong); background: var(--bg-hover); }
 
 /* ---------- controles ---------- */
@@ -105,7 +106,7 @@ button { font: inherit; cursor: pointer; }
   width: 100%;
   background: var(--bg-raised); color: var(--text);
   border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 11px 14px; font: inherit; font-size: 15px;
+  padding: 11px 14px; font: inherit; font-size: 16px;
 }
 .input:focus, .textarea:focus, .select:focus {
   outline: none; border-color: var(--accent);
@@ -375,4 +376,148 @@ button { font: inherit; cursor: pointer; }
 @media (max-width: 560px) {
   .main { padding: 16px 14px 96px; }
   .detail-header h1 { font-size: 22px; }
+}
+
+
+/* ---------- práctica: el Dado y los micropasos ---------- */
+
+.practice-top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 22px; }
+.practice-top h1 { font-size: 24px; }
+.practice-top .hint { margin: 2px 0 0; }
+.today-pill {
+  margin-left: auto; flex: none; text-align: center;
+  background: var(--bg-raised); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 6px 14px;
+}
+.today-pill .n { display: block; font-family: var(--font-display); font-size: 22px; color: var(--accent-strong); line-height: 1.1; }
+.today-pill .l { font-size: 11.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.5px; }
+
+.dice-stage { text-align: center; padding: 12px 0 8px; }
+.dice-face {
+  font-size: 76px; line-height: 1; margin-bottom: 22px;
+  filter: drop-shadow(0 6px 18px color-mix(in srgb, var(--accent) 22%, transparent));
+}
+.dice-stage.rolling .dice-face { animation: tumble 0.62s cubic-bezier(0.34, 1.3, 0.64, 1); }
+@keyframes tumble {
+  0%   { transform: rotate(0) scale(1); }
+  35%  { transform: rotate(-18deg) scale(1.14); }
+  70%  { transform: rotate(14deg) scale(0.96); }
+  100% { transform: rotate(0) scale(1); }
+}
+.dice-btn { padding: 15px 30px; font-size: 17px; border-radius: 99px; }
+.dice-btn:active { transform: scale(0.97); }
+.dice-count { color: var(--text-faint); font-size: 13.5px; margin: 14px 0 20px; }
+.dice-filters { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.dice-empty { color: var(--text-dim); max-width: 420px; margin: 0 auto 18px; }
+.dice-empty p { margin-top: 0; }
+
+/* La carta del micropaso: una cosa, grande, sin nada más que decidir. */
+.step-card {
+  background: var(--bg-raised); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; text-align: left;
+}
+.step-source {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  background: none; border: none; padding: 0 0 12px; margin-bottom: 14px;
+  border-bottom: 1px solid var(--border); color: var(--text-dim); text-align: left;
+}
+.step-source .cat { color: var(--accent-strong); font-size: 12.5px; white-space: nowrap; }
+.step-source .titulo {
+  font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.step-source .prog { margin-left: auto; font-size: 12.5px; color: var(--text-faint); flex: none; }
+
+.step-why {
+  font-family: var(--font-display); font-style: italic;
+  color: var(--accent); font-size: 14.5px; margin: 0 0 14px;
+}
+.step-text {
+  font-family: var(--font-display); font-size: 23px; line-height: 1.35;
+  margin: 0 0 16px; color: var(--text);
+}
+.step-criterio {
+  background: var(--bg); border-left: 2px solid var(--accent);
+  padding: 10px 14px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 14.5px; color: var(--text-dim); margin: 0 0 20px;
+}
+.step-criterio .label {
+  display: block; font-size: 11.5px; text-transform: uppercase;
+  letter-spacing: 0.6px; color: var(--text-faint); margin-bottom: 3px;
+}
+
+.step-actions { display: flex; flex-direction: column; gap: 10px; }
+.step-actions .row { display: flex; gap: 8px; }
+.step-actions .row .btn { flex: 1; padding: 10px 8px; font-size: 14px; }
+.btn.big { padding: 15px 24px; font-size: 17px; }
+.step-legend { text-align: center; margin: 14px 0 0; font-size: 12.5px; }
+
+.step-card.done { text-align: center; }
+.step-card.done .step-actions { margin-top: 18px; }
+.done-mark {
+  width: 62px; height: 62px; margin: 4px auto 14px;
+  display: grid; place-items: center; border-radius: 50%;
+  background: color-mix(in srgb, var(--ok) 16%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--ok) 45%, var(--border));
+  color: var(--ok); font-size: 30px;
+}
+.done-title { font-size: 22px; margin-bottom: 6px; }
+.done-sub { color: var(--text-dim); font-size: 14.5px; margin: 0 0 16px; }
+
+.spring-in { animation: spring-in 0.32s cubic-bezier(0.22, 1.2, 0.36, 1); }
+@keyframes spring-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---------- bloque "Aplicar esto" de la ficha ---------- */
+
+.practice-block {
+  background: var(--bg-raised); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 18px; margin: 16px 0;
+}
+.practice-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.practice-head h2 { font-size: 18px; }
+.prog-label { margin-left: auto; font-size: 13px; color: var(--text-faint); }
+.prog-label.full { color: var(--ok); }
+
+.prog-bar {
+  height: 4px; border-radius: 99px; background: var(--bg-hover); overflow: hidden;
+}
+.prog-bar > span {
+  display: block; height: 100%; border-radius: 99px;
+  background: var(--accent); transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.step-list { list-style: none; margin: 12px 0 0; padding: 0; }
+.step-check {
+  display: flex; gap: 11px; width: 100%; text-align: left;
+  background: none; border: none; color: var(--text);
+  padding: 9px 0; border-top: 1px solid var(--border);
+}
+.step-list li:first-child .step-check { border-top: none; }
+.step-check .box {
+  flex: none; width: 22px; height: 22px; margin-top: 1px;
+  border: 1px solid var(--border); border-radius: 6px;
+  display: grid; place-items: center; font-size: 14px; color: var(--accent-ink);
+  transition: background 0.18s, border-color 0.18s;
+}
+.step-check:hover .box { border-color: var(--accent); }
+.step-check .txt { display: flex; flex-direction: column; gap: 2px; }
+.step-check .main { font-size: 15px; line-height: 1.4; }
+.step-check .sub { font-size: 12.5px; color: var(--text-faint); }
+
+.step-list li.hecho .box { background: var(--accent); border-color: var(--accent); }
+.step-list li.hecho .main { color: var(--text-dim); text-decoration: line-through; }
+.step-list li.descartado .box { color: var(--text-faint); }
+.step-list li.descartado .main { color: var(--text-faint); text-decoration: line-through; }
+
+/* Estado de aplicación en la biblioteca. */
+.chip.aplicacion { color: var(--accent-strong); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.chip.aplicacion.aplicada { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--border)); }
+.card-item.fase-aplicada { border-left: 2px solid color-mix(in srgb, var(--ok) 55%, var(--border)); }
+.card-item.fase-en-practica { border-left: 2px solid color-mix(in srgb, var(--accent) 55%, var(--border)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .spring-in, .dice-stage.rolling .dice-face { animation: none; }
+  .prog-bar > span { transition: none; }
 }

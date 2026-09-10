@@ -5,6 +5,7 @@ dist/
 
 # Notas locales de Claude Code (no publicar)
 CLAUDE.md
+.claude/
 
 # Companion: descargas cacheadas y cookies de sesión (¡nunca publicar!)
 companion/downloads/

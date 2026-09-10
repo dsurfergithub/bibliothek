@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { KnowledgeCard } from './domain/types';
+import type { KnowledgeCard, StepRecord } from './domain/types';
 import { getApiKey } from './services/apiKey';
 import { importCards, listCards } from './services/db';
+import { ensureSteps, importSteps, listSteps } from './services/steps';
 import { clearSyncHash, decodeSyncPayload, pendingSyncPayload } from './services/sync';
 import { enqueue, mergeQueue } from './services/queue';
 import { Onboarding } from './ui/Onboarding';
 import { Library } from './ui/Library';
+import { Practice } from './ui/Practice';
 import { ImportView } from './ui/ImportView';
 import { CardDetail } from './ui/CardDetail';
 import { Insights } from './ui/Insights';
@@ -13,6 +15,7 @@ import { Settings } from './ui/Settings';
 
 type View =
   | { name: 'library' }
+  | { name: 'practice' }
   | { name: 'import'; startTab?: 'instagram' }
   | { name: 'card'; id: string }
   | { name: 'insights' }
@@ -22,13 +25,22 @@ export default function App() {
   const [hasKey, setHasKey] = useState(() => getApiKey() !== null);
   const [view, setView] = useState<View>({ name: 'library' });
   const [cards, setCards] = useState<KnowledgeCard[]>([]);
+  const [steps, setSteps] = useState<StepRecord[]>([]);
 
-  const refresh = useCallback(() => {
-    listCards().then(setCards);
+  /** Recarga fichas y, de paso, crea los micropasos que falten (fichas antiguas incluidas). */
+  const refresh = useCallback(async () => {
+    const list = await listCards();
+    setCards(list);
+    setSteps(await ensureSteps(list));
+  }, []);
+
+  /** Solo el estado de los pasos: marcar uno no tiene por qué recargar la biblioteca. */
+  const refreshSteps = useCallback(() => {
+    listSteps().then(setSteps);
   }, []);
 
   useEffect(() => {
-    if (hasKey) refresh();
+    if (hasKey) void refresh();
   }, [hasKey, refresh]);
 
   // ¿Venimos de un enlace de sincronización de otro dispositivo?
@@ -39,7 +51,7 @@ export default function App() {
     // no deja toda la biblioteca visible en la barra de direcciones.
     clearSyncHash();
     decodeSyncPayload(payload)
-      .then(async ({ cards, queue }) => {
+      .then(async ({ cards, queue, steps }) => {
         const partes: string[] = [];
         if (cards.length) partes.push(`${cards.length} ficha${cards.length > 1 ? 's' : ''}`);
         if (queue.length) partes.push(`${queue.length} reel${queue.length > 1 ? 's' : ''} pendiente${queue.length > 1 ? 's' : ''}`);
@@ -49,8 +61,9 @@ export default function App() {
         );
         if (!ok) return;
         if (cards.length) await importCards(cards);
+        if (steps.length) await importSteps(steps);
         if (queue.length) mergeQueue(queue);
-        refresh();
+        void refresh();
         if (queue.length) setView({ name: 'import', startTab: 'instagram' });
       })
       .catch(() => {
@@ -94,37 +107,51 @@ export default function App() {
         {view.name === 'library' && (
           <Library
             cards={cards}
+            steps={steps}
             onOpen={(id) => setView({ name: 'card', id })}
             onImport={() => setView({ name: 'import' })}
+          />
+        )}
+        {view.name === 'practice' && (
+          <Practice
+            cards={cards}
+            steps={steps}
+            onChanged={refreshSteps}
+            onOpenCard={(id) => setView({ name: 'card', id })}
           />
         )}
         {view.name === 'import' && (
           <ImportView
             startTab={view.startTab}
             onSaved={(card) => {
-              refresh();
+              void refresh();
               setView({ name: 'card', id: card.id });
             }}
-            onBatchDone={refresh}
+            onBatchDone={() => void refresh()}
           />
         )}
         {view.name === 'card' && openCard && (
           <CardDetail
             card={openCard}
+            steps={steps}
             onBack={() => setView({ name: 'library' })}
             onChanged={(updated) => {
-              refresh();
+              void refresh();
               if (updated === null) setView({ name: 'library' });
             }}
+            onStepsChanged={refreshSteps}
           />
         )}
         {view.name === 'insights' && <Insights cards={cards} />}
-        {view.name === 'settings' && <Settings onLibraryChanged={refresh} />}
+        {view.name === 'settings' && <Settings onLibraryChanged={() => void refresh()} />}
       </main>
 
       <nav className="tabbar">
         <button className={view.name === 'library' || view.name === 'card' ? 'active' : ''} onClick={() => setView({ name: 'library' })}>
           <span className="icon">📚</span>Biblioteca
+        </button>
+        <button className={view.name === 'practice' ? 'active' : ''} onClick={() => setView({ name: 'practice' })}>
+          <span className="icon">🎲</span>Práctica
         </button>
         <button className={view.name === 'import' ? 'active' : ''} onClick={() => setView({ name: 'import' })}>
           <span className="icon">✨</span>Añadir

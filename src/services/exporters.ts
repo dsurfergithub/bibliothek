@@ -1,7 +1,11 @@
-import { LIST_SECTIONS, type KnowledgeCard } from '../domain/types';
+import { LIST_SECTIONS, PRACTICE_KEYS, type KnowledgeCard, type StepRecord } from '../domain/types';
 
-/** Exporta una ficha a Markdown (compatible con Obsidian: frontmatter YAML). */
-export function cardToMarkdown(card: KnowledgeCard): string {
+/**
+ * Exporta una ficha a Markdown (compatible con Obsidian: frontmatter YAML).
+ * Si se le pasan los micropasos, el checklist sale con su estado real: lo que
+ * llevas aplicado viaja al vault marcado, no como una lista de buenos deseos.
+ */
+export function cardToMarkdown(card: KnowledgeCard, pasos: StepRecord[] = []): string {
   const e = card.evaluacion;
   const stars = '★'.repeat(Math.round(e.utilidad / 2)) + '☆'.repeat(5 - Math.round(e.utilidad / 2));
   const lines: string[] = [
@@ -33,12 +37,26 @@ export function cardToMarkdown(card: KnowledgeCard): string {
     lines.push('## Análisis crítico', '', card.analisisCritico, '');
   }
 
+  const acciones = card.acciones ?? [];
+  if (acciones.length > 0) {
+    const hechos = pasos.filter((p) => p.estado === 'hecho').length;
+    lines.push(`## Aplicar esto${pasos.length ? ` (${hechos}/${pasos.length})` : ''}`, '');
+    for (let i = 0; i < acciones.length; i++) {
+      const paso = pasos.find((p) => p.indice === i);
+      const marca = paso?.estado === 'hecho' ? 'x' : ' ';
+      const criterio = card.checklist?.[i]?.trim();
+      lines.push(`- [${marca}] ${acciones[i]}${criterio ? ` — *hecho cuando:* ${criterio}` : ''}`);
+    }
+    lines.push('');
+  }
+
   for (const { key, label } of LIST_SECTIONS) {
+    // acciones y checklist ya han salido arriba, con su estado.
+    if (PRACTICE_KEYS.includes(key)) continue;
     const items = card[key] as string[];
-    if (items.length === 0) continue;
+    if (!items || items.length === 0) continue;
     lines.push(`## ${label}`, '');
-    const bullet = key === 'checklist' ? '- [ ]' : '-';
-    for (const item of items) lines.push(`${bullet} ${item}`);
+    for (const item of items) lines.push(`- ${item}`);
     lines.push('');
   }
 
