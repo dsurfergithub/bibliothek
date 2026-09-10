@@ -1,6 +1,6 @@
 /* Bibliotheke service worker: app-shell cache para uso offline de la biblioteca. */
-const CACHE = 'bibliotheke-v2';
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
+const CACHE = 'bibliotheke-v3';
+const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg', '/apple-touch-icon.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));

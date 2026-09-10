@@ -5,6 +5,7 @@ import { companionOnline } from '../services/companion';
 import { listCards, saveCard } from '../services/db';
 import { buildSyncLink } from '../services/sync';
 import { dequeue, enqueue, listQueue, shortcodeOf, type PendingReel } from '../services/queue';
+import { IconAdd, IconCheck, IconFilm, SourceIcon } from './icons';
 import type { KnowledgeCard } from '../domain/types';
 
 type Mode = 'video' | 'youtube' | 'instagram' | 'texto';
@@ -218,12 +219,12 @@ export function ImportView({
     const currentIdx = visibleStages.indexOf(stage!);
     return (
       <div className="card">
-        <h2 style={{ marginBottom: 4 }}>Analizando…</h2>
+        <h2 className="card-h">Analizando…</h2>
         <p className="hint">Gemini está destilando el conocimiento. Suele tardar menos de un minuto.</p>
         <ul className="stages">
           {visibleStages.map((s, i) => (
             <li key={s} className={i < currentIdx ? 'done' : i === currentIdx ? 'current' : ''}>
-              <span className="dot">{i < currentIdx ? '✓' : ''}</span>
+              <span className="dot">{i < currentIdx && <IconCheck size={11} />}</span>
               {STAGE_LABELS[s]}
             </li>
           ))}
@@ -234,18 +235,25 @@ export function ImportView({
 
   return (
     <div>
-      <h1 style={{ fontSize: 24, marginBottom: 14 }}>Añadir conocimiento</h1>
+      <h1 className="view-title">Añadir conocimiento</h1>
 
-      <div className="segmented">
+      <div className="segmented" role="tablist" aria-label="Tipo de fuente">
         {(
           [
-            ['video', '🎞️ Vídeo'],
-            ['youtube', '▶️ YouTube'],
-            ['instagram', '📸 Instagram'],
-            ['texto', '📄 Texto'],
+            ['video', 'Vídeo'],
+            ['youtube', 'YouTube'],
+            ['instagram', 'Instagram'],
+            ['texto', 'Texto'],
           ] as [Mode, string][]
         ).map(([m, label]) => (
-          <button key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>
+          <button
+            key={m}
+            role="tab"
+            aria-selected={mode === m}
+            className={mode === m ? 'on' : ''}
+            onClick={() => setMode(m)}
+          >
+            <SourceIcon tipo={m} size={15} />
             {label}
           </button>
         ))}
@@ -268,7 +276,7 @@ export function ImportView({
               if (dropped) setFile(dropped);
             }}
           >
-            <span className="icon">🎞️</span>
+            <span className="icon"><IconFilm size={30} /></span>
             {file ? (
               <strong>{file.name}</strong>
             ) : (
@@ -329,7 +337,7 @@ export function ImportView({
               </p>
               <div className="settings-row">
                 <button className="btn primary" disabled={!igValid} onClick={analyzeNow}>
-                  ✨ Analizar ahora
+                  <IconAdd size={17} /> Analizar ahora
                 </button>
                 <button className="btn" disabled={!igValid} onClick={addToQueue}>
                   ➕ A la cola
@@ -344,7 +352,7 @@ export function ImportView({
                 <strong>Este dispositivo no puede descargar de Instagram por sí solo</strong> (ni el
                 móvil, ni un PC sin el compañero en marcha). Guarda el reel en la cola y procésalo
                 luego en tu PC con el compañero abierto — o descárgalo tú y súbelo en la pestaña
-                🎞️ Vídeo, que no necesita nada extra.
+                <strong>Vídeo</strong>, que no necesita nada extra.
               </div>
               <div className="settings-row" style={{ marginTop: 10 }}>
                 <button className="btn primary" disabled={!igValid} onClick={addToQueue}>
@@ -380,7 +388,7 @@ export function ImportView({
                     <a href="https://github.com/dsurfergithub/bibliothek" target="_blank" rel="noreferrer">
                       GitHub
                     </a>
-                    . ¿No quieres instalar nada? Descarga el reel y súbelo en <strong>🎞️ Vídeo</strong>.
+                    . ¿No quieres instalar nada? Descarga el reel y súbelo en <strong>Vídeo</strong>.
                   </p>
                 </div>
               </details>
@@ -399,7 +407,7 @@ export function ImportView({
           {batchResult && (
             <div className={batchResult.errors.length ? 'error-box' : 'ok-box'} style={{ marginTop: 12 }}>
               <div>
-                {batchResult.ok > 0 ? `✓ ${batchResult.ok} reel(s) convertidos en fichas.` : 'No se procesó ningún reel.'}
+                {batchResult.ok > 0 ? `${batchResult.ok} reel(s) convertidos en fichas.` : 'No se procesó ningún reel.'}
                 {batchResult.errors.length > 0 && ` ${batchResult.errors.length} con error (siguen en la cola):`}
               </div>
               {batchResult.errors.length > 0 && (
@@ -474,7 +482,7 @@ export function ImportView({
 
       {mode !== 'instagram' && (
         <button className="btn primary" style={{ width: '100%', marginTop: 8 }} disabled={!input} onClick={run}>
-          ✨ Extraer conocimiento
+          <IconAdd size={18} /> Extraer conocimiento
         </button>
       )}
     </div>

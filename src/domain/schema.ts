@@ -1,4 +1,19 @@
-import { Type, type Schema } from '@google/genai';
+import type { Schema, Type as GenType } from '@google/genai';
+
+/**
+ * Los miembros de `Type` del SDK son cadenas ("STRING", "ARRAY"…). Importar el
+ * enum en tiempo de ejecución arrastraría los ~350 kB del SDK al bundle de
+ * arranque solo por seis constantes, así que se replican aquí. La importación
+ * de tipos de arriba se borra al compilar.
+ */
+const Type = {
+  STRING: 'STRING',
+  INTEGER: 'INTEGER',
+  NUMBER: 'NUMBER',
+  BOOLEAN: 'BOOLEAN',
+  ARRAY: 'ARRAY',
+  OBJECT: 'OBJECT',
+} as unknown as Record<'STRING' | 'INTEGER' | 'NUMBER' | 'BOOLEAN' | 'ARRAY' | 'OBJECT', GenType>;
 
 const str: Schema = { type: Type.STRING };
 const strArr: Schema = { type: Type.ARRAY, items: { type: Type.STRING } };

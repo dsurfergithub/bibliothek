@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { KnowledgeCard, StepRecord } from './domain/types';
 import { getApiKey } from './services/apiKey';
 import { importCards, listCards } from './services/db';
-import { ensureSteps, importSteps, listSteps } from './services/steps';
+import { doneToday, ensureSteps, importSteps, listSteps } from './services/steps';
 import { clearSyncHash, decodeSyncPayload, pendingSyncPayload } from './services/sync';
 import { enqueue, mergeQueue } from './services/queue';
 import { Onboarding } from './ui/Onboarding';
@@ -12,6 +12,7 @@ import { ImportView } from './ui/ImportView';
 import { CardDetail } from './ui/CardDetail';
 import { Insights } from './ui/Insights';
 import { Settings } from './ui/Settings';
+import { IconAdd, IconChart, IconDice, IconLibrary, IconSettings } from './ui/icons';
 
 type View =
   | { name: 'library' }
@@ -91,16 +92,17 @@ export default function App() {
   }
 
   const openCard = cards.find((c) => view.name === 'card' && c.id === view.id);
+  // Punto en la pestaña Práctica: hay pasos esperando y hoy no has dado ninguno.
+  const pendientesHoy = doneToday(steps) === 0 && steps.some((s) => s.estado === 'pendiente');
 
   return (
     <>
       <header className="app-header">
         <img className="logo" src="/icon.svg" alt="" />
-        <div>
-          <div className="brand">Bibliotheke</div>
-          <div className="tagline">No guardes contenido. Guarda conocimiento.</div>
+        <div className="brand-block">
+          <span className="brand">Bibliotheke</span>
+          <span className="tagline">No guardes contenido. Guarda conocimiento.</span>
         </div>
-        <div className="spacer" />
       </header>
 
       <main className="main">
@@ -142,27 +144,59 @@ export default function App() {
             onStepsChanged={refreshSteps}
           />
         )}
-        {view.name === 'insights' && <Insights cards={cards} />}
+        {view.name === 'insights' && (
+          <Insights
+            cards={cards}
+            steps={steps}
+            onOpenCard={(id) => setView({ name: 'card', id })}
+            onPractice={() => setView({ name: 'practice' })}
+          />
+        )}
         {view.name === 'settings' && <Settings onLibraryChanged={() => void refresh()} />}
       </main>
 
-      <nav className="tabbar">
-        <button className={view.name === 'library' || view.name === 'card' ? 'active' : ''} onClick={() => setView({ name: 'library' })}>
-          <span className="icon">📚</span>Biblioteca
-        </button>
-        <button className={view.name === 'practice' ? 'active' : ''} onClick={() => setView({ name: 'practice' })}>
-          <span className="icon">🎲</span>Práctica
-        </button>
-        <button className={view.name === 'import' ? 'active' : ''} onClick={() => setView({ name: 'import' })}>
-          <span className="icon">✨</span>Añadir
-        </button>
-        <button className={view.name === 'insights' ? 'active' : ''} onClick={() => setView({ name: 'insights' })}>
-          <span className="icon">📊</span>Insights
-        </button>
-        <button className={view.name === 'settings' ? 'active' : ''} onClick={() => setView({ name: 'settings' })}>
-          <span className="icon">⚙️</span>Ajustes
-        </button>
+      <nav className="tabbar" aria-label="Secciones">
+        <Tab label="Biblioteca" active={view.name === 'library' || view.name === 'card'} onClick={() => setView({ name: 'library' })}>
+          <IconLibrary size={21} />
+        </Tab>
+        <Tab label="Práctica" active={view.name === 'practice'} onClick={() => setView({ name: 'practice' })} badge={pendientesHoy}>
+          <IconDice size={21} />
+        </Tab>
+        <Tab label="Añadir" active={view.name === 'import'} onClick={() => setView({ name: 'import' })}>
+          <IconAdd size={21} />
+        </Tab>
+        <Tab label="Insights" active={view.name === 'insights'} onClick={() => setView({ name: 'insights' })}>
+          <IconChart size={21} />
+        </Tab>
+        <Tab label="Ajustes" active={view.name === 'settings'} onClick={() => setView({ name: 'settings' })}>
+          <IconSettings size={21} />
+        </Tab>
       </nav>
     </>
+  );
+}
+
+/** Una pestaña de la barra inferior: icono, etiqueta y punto de aviso. */
+function Tab({
+  label,
+  active,
+  onClick,
+  badge,
+  children,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  badge?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button className={active ? 'active' : ''} onClick={onClick} aria-current={active ? 'page' : undefined}>
+      <span className="icon">
+        {children}
+        {badge && !active && <span className="dot" aria-hidden="true" />}
+      </span>
+      {label}
+    </button>
   );
 }

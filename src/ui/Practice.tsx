@@ -10,6 +10,7 @@ import {
   type DiceFilter,
   type StepPick,
 } from '../services/steps';
+import { DiceFace, IconBan, IconBolt, IconCheck, IconDice, IconSkip, IconSnooze } from './icons';
 
 /**
  * El Dado: práctica sin decidir. En vez de mirar la biblioteca entera y elegir
@@ -17,7 +18,6 @@ import {
  * dice por qué te toca ese. Cuatro respuestas y a otra cosa.
  */
 
-const CARAS = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 const ROLL_MS = 620;
 
 type Fase = 'idle' | 'rolling' | 'step' | 'done';
@@ -35,7 +35,7 @@ export function Practice({
 }) {
   const [fase, setFase] = useState<Fase>('idle');
   const [pick, setPick] = useState<StepPick | null>(null);
-  const [cara, setCara] = useState(0);
+  const [cara, setCara] = useState(5);
   const [categoria, setCategoria] = useState<string | null>(null);
   const [soloFaciles, setSoloFaciles] = useState(false);
   const timers = useRef<number[]>([]);
@@ -62,7 +62,7 @@ export function Practice({
     }
     setFase('rolling');
     let n = 0;
-    const gira = window.setInterval(() => setCara(++n % CARAS.length), 90);
+    const gira = window.setInterval(() => setCara((++n % 6) + 1), 90);
     const fin = window.setTimeout(() => {
       clearInterval(gira);
       setPick(elegido);
@@ -83,7 +83,6 @@ export function Practice({
   if (cards.length === 0) {
     return (
       <div className="empty-state">
-        <div className="big">🎲</div>
         <h2>Nada que practicar todavía</h2>
         <p>Cada ficha que añadas trae 5 micropasos. El Dado te irá sirviendo uno cada vez para que apliques lo que guardas.</p>
       </div>
@@ -94,7 +93,7 @@ export function Practice({
     <div className="practice">
       <div className="practice-top">
         <div>
-          <h1>Práctica</h1>
+          <h1 className="view-title">Práctica</h1>
           <p className="hint">Un micropaso cada vez. Sin elegir, sin excusas.</p>
         </div>
         <div className="today-pill" title="Micropasos aplicados hoy">
@@ -123,7 +122,7 @@ export function Practice({
       ) : (
         <div className={`dice-stage ${fase === 'rolling' ? 'rolling' : ''}`}>
           <div className="dice-face" aria-hidden="true">
-            {fase === 'rolling' ? CARAS[cara] : '🎲'}
+            <DiceFace value={fase === 'rolling' ? cara : 5} />
           </div>
 
           {disponibles.length === 0 ? (
@@ -164,7 +163,7 @@ export function Practice({
               className={`chip-filter ${soloFaciles ? 'on' : ''}`}
               onClick={() => setSoloFaciles(!soloFaciles)}
             >
-              ⚡ Solo fáciles
+              <IconBolt size={13} /> Solo fáciles
             </button>
             {categorias.map((cat) => (
               <button
@@ -219,17 +218,17 @@ function StepCard({
 
       <div className="step-actions">
         <button className="btn primary big" onClick={() => onResponder('hecho')}>
-          ✓ Hecho
+          <IconCheck size={19} /> Hecho
         </button>
         <div className="row">
           <button className="btn" onClick={onOtro}>
-            ⏭️ Otro
+            <IconSkip size={16} /> Otro
           </button>
           <button className="btn" onClick={() => onResponder('aplazado')}>
-            😴 Ahora no
+            <IconSnooze size={16} /> Ahora no
           </button>
           <button className="btn" onClick={() => onResponder('descartado')}>
-            🚫 No aplica
+            <IconBan size={16} /> No aplica
           </button>
         </div>
       </div>
@@ -260,7 +259,7 @@ function DoneCard({
   return (
     <div className="step-card done spring-in">
       <div className="done-mark" aria-hidden="true">
-        ✓
+        <IconCheck size={30} />
       </div>
       <h2 className="done-title">{completa ? 'Ficha aplicada entera' : 'Un paso menos'}</h2>
       <p className="done-sub">
@@ -274,7 +273,7 @@ function DoneCard({
       <div className="step-actions">
         {quedan > 0 && (
           <button className="btn primary big" onClick={onOtro}>
-            🎲 Otro micropaso
+            <IconDice size={19} /> Otro micropaso
           </button>
         )}
         <div className="row">

@@ -1,5 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
-
 /**
  * La API key vive SOLO en este dispositivo (localStorage) y solo viaja a la
  * API de Google. Nunca se envía a ningún servidor de Bibliotheke — no existe
@@ -36,8 +34,12 @@ export function setModel(model: string): void {
   localStorage.setItem(MODEL_KEY, model);
 }
 
-/** Valida la clave con una petición mínima (listar modelos: no consume tokens). */
+/**
+ * Valida la clave con una petición mínima (listar modelos: no consume tokens).
+ * Importa el SDK a demanda para no meterlo en el bundle de arranque.
+ */
 export async function validateApiKey(key: string): Promise<void> {
+  const { GoogleGenAI } = await import('@google/genai');
   const ai = new GoogleGenAI({ apiKey: key.trim() });
   await ai.models.list();
 }

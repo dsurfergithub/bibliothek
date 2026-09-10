@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { KnowledgeCard, StepRecord } from '../domain/types';
 import { phaseOf, progressOf } from '../services/steps';
-
-const SOURCE_ICON: Record<string, string> = { video: '🎞️', youtube: '▶️', instagram: '📸', texto: '📄' };
+import { IconAdd, IconBolt, IconSearch, ProgressRing, SourceIcon, Stars } from './icons';
 
 function matches(card: KnowledgeCard, q: string): boolean {
   const haystack = [
@@ -11,16 +10,16 @@ function matches(card: KnowledgeCard, q: string): boolean {
     card.resumenDetallado,
     card.ideaPrincipal,
     card.categoria,
-    ...card.etiquetas,
-    ...card.herramientas,
-    ...card.webs,
-    ...card.apps,
-    ...card.libros,
-    ...card.personas,
-    ...card.empresas,
-    ...card.conceptos,
-    ...card.aprendizajes,
-    ...card.consejos,
+    ...(card.etiquetas ?? []),
+    ...(card.herramientas ?? []),
+    ...(card.webs ?? []),
+    ...(card.apps ?? []),
+    ...(card.libros ?? []),
+    ...(card.personas ?? []),
+    ...(card.empresas ?? []),
+    ...(card.conceptos ?? []),
+    ...(card.aprendizajes ?? []),
+    ...(card.consejos ?? []),
   ]
     .join(' ')
     .toLowerCase();
@@ -59,14 +58,18 @@ export function Library({
       (!sinAplicar || phaseOf(steps, c.id) !== 'aplicada')
   );
 
+  const hayFiltro = Boolean(categoria || nivel || sinAplicar || query.trim());
+
   if (cards.length === 0) {
     return (
       <div className="empty-state">
-        <div className="big">📚</div>
-        <h2 style={{ marginBottom: 8 }}>Tu biblioteca está vacía</h2>
-        <p>Añade tu primer Reel, vídeo de YouTube o texto y conviértelo en conocimiento.</p>
+        <h2>Tu biblioteca está vacía</h2>
+        <p>
+          Pega un Reel, un vídeo de YouTube o un texto y Bibliotheke lo destila en una ficha: la idea principal, lo que
+          conviene verificar y cinco micropasos para aplicarlo.
+        </p>
         <button className="btn primary" onClick={onImport}>
-          + Añadir conocimiento
+          <IconAdd size={18} /> Añadir la primera
         </button>
       </div>
     );
@@ -75,29 +78,36 @@ export function Library({
   return (
     <div>
       <div className="search-row">
-        <input
-          className="input"
-          placeholder="Buscar: n8n, inversión, prompts…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <button className="btn primary" onClick={onImport}>
-          + Añadir
+        <div className="search-field">
+          <IconSearch size={17} />
+          <input
+            className="input"
+            type="search"
+            placeholder="Buscar en tu biblioteca"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Buscar en tu biblioteca"
+          />
+        </div>
+        <button className="btn primary square" onClick={onImport} aria-label="Añadir conocimiento">
+          <IconAdd size={20} />
         </button>
       </div>
 
-      <div className="filters">
+      <div className="filters" role="group" aria-label="Filtros">
         <button
           className={`chip-filter ${sinAplicar ? 'on' : ''}`}
           onClick={() => setSinAplicar(!sinAplicar)}
+          aria-pressed={sinAplicar}
         >
-          ⚡ Sin aplicar
+          <IconBolt size={13} /> Sin aplicar
         </button>
         {categorias.map((cat) => (
           <button
             key={cat}
             className={`chip-filter ${categoria === cat ? 'on' : ''}`}
             onClick={() => setCategoria(categoria === cat ? null : cat)}
+            aria-pressed={categoria === cat}
           >
             {cat}
           </button>
@@ -107,47 +117,64 @@ export function Library({
             key={n}
             className={`chip-filter ${nivel === n ? 'on' : ''}`}
             onClick={() => setNivel(nivel === n ? null : n)}
+            aria-pressed={nivel === n}
           >
             {n}
           </button>
         ))}
       </div>
 
-      {visible.length === 0 && (
-        <p className="hint" style={{ textAlign: 'center', padding: 30 }}>
-          Ninguna ficha coincide con la búsqueda.
-        </p>
-      )}
+      <p className="result-count" aria-live="polite">
+        {hayFiltro ? `${visible.length} de ${cards.length} fichas` : `${cards.length} fichas`}
+      </p>
 
-      {visible.map((card) => {
-        const stars = Math.round(card.evaluacion.utilidad / 2);
-        const { hechos, total } = progressOf(steps, card.id);
-        const fase = phaseOf(steps, card.id);
-        return (
-          <button key={card.id} className={`card-item fase-${fase}`} onClick={() => onOpen(card.id)}>
-            <h3>
-              {SOURCE_ICON[card.fuente.tipo] ?? '📄'} {card.titulo}
-            </h3>
-            <div className="summary">{card.resumenCorto}</div>
-            <div className="meta">
-              {hechos > 0 && (
-                <span className={`chip aplicacion ${fase}`}>
-                  {fase === 'aplicada' ? '✓ Aplicada' : `${hechos}/${total} aplicado`}
-                </span>
-              )}
-              <span className="stars">{'★'.repeat(stars)}{'☆'.repeat(5 - stars)}</span>
-              {card.categoria && <span className="chip accent">{card.categoria}</span>}
-              <span className="chip">{card.nivel}</span>
-              {card.etiquetas.slice(0, 3).map((tag) => (
-                <span key={tag} className="chip">#{tag}</span>
-              ))}
-              <span className="date">
-                {new Date(card.createdAt).toLocaleDateString('es', { day: 'numeric', month: 'short' })}
-              </span>
-            </div>
-          </button>
-        );
-      })}
+      {visible.length === 0 ? (
+        <div className="empty-state compact">
+          <p>Ninguna ficha coincide con lo que buscas.</p>
+          {hayFiltro && (
+            <button
+              className="btn"
+              onClick={() => {
+                setQuery('');
+                setCategoria(null);
+                setNivel(null);
+                setSinAplicar(false);
+              }}
+            >
+              Quitar filtros
+            </button>
+          )}
+        </div>
+      ) : (
+        <ul className="card-list stack">
+          {visible.map((card) => {
+            const { hechos, total } = progressOf(steps, card.id);
+            const fase = phaseOf(steps, card.id);
+            return (
+              <li key={card.id}>
+                <button className={`card-item fase-${fase}`} onClick={() => onOpen(card.id)}>
+                  <span className="card-head">
+                    <span className="card-source" aria-hidden="true">
+                      <SourceIcon tipo={card.fuente.tipo} size={15} />
+                    </span>
+                    <span className="card-title">{card.titulo}</span>
+                    {hechos > 0 && <ProgressRing done={hechos} total={total} />}
+                  </span>
+                  <span className="card-summary">{card.resumenCorto}</span>
+                  <span className="card-meta">
+                    <Stars value={Math.round((card.evaluacion?.utilidad ?? 0) / 2)} />
+                    {card.categoria && <span className="chip accent">{card.categoria}</span>}
+                    <span className="chip">{card.nivel}</span>
+                    <span className="card-date">
+                      {new Date(card.createdAt).toLocaleDateString('es', { day: 'numeric', month: 'short' })}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

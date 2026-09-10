@@ -4,6 +4,8 @@
 
 Bibliotheke convierte Reels, vídeos de YouTube y textos en **fichas de conocimiento estructurado** usando Gemini. En lugar de acumular cientos de vídeos guardados que nunca vuelves a ver, construyes una biblioteca buscable de aprendizajes, herramientas, prompts y acciones concretas.
 
+Y, sobre todo, **te obliga a aplicarlas**: cada ficha trae cinco micropasos y la app lleva la cuenta de cuáles has dado.
+
 ## Cómo funciona
 
 ```
@@ -18,11 +20,23 @@ libros · prompts · acciones · evaluación crítica · etiquetas
         │
         ▼
 Biblioteca local buscable → exporta a Markdown (Obsidian) o JSON
+        │
+        ▼
+   El Dado 🎲 → un micropaso cada vez → Insights: qué guardas vs. qué aplicas
 ```
 
 - **Vídeo de YouTube**: pega la URL y ya está — Gemini procesa vídeos de YouTube de forma nativa, sin descargar nada.
-- **Reel / TikTok / vídeo propio**: sube o comparte el archivo de vídeo. (Instagram no ofrece API de descarga; los scrapers son frágiles y violan sus ToS, así que el MVP no depende de ellos.)
+- **Reel de Instagram**: pega la URL con el *companion* local abierto (servidor Node con yt-dlp en `companion/`), o sube el vídeo a mano. En el móvil, compartir un reel a la app lo deja en una cola que se procesa luego en el PC.
+- **Vídeo propio**: sube o arrastra el archivo.
 - **Texto**: pega artículos, hilos, newsletters o transcripciones.
+
+## De guardar a aplicar
+
+Guardar conocimiento es fácil; aplicarlo es lo difícil. Por eso el análisis produce **exactamente 5 micropasos** por ficha, ordenados de fácil a difícil y ejecutables en menos de 30 minutos, y la app cierra el bucle:
+
+- **🎲 Práctica** — el Dado te sirve **un** micropaso a pantalla completa y te dice **por qué te toca ese**: la elección es aleatoria pero ponderada por la utilidad de la ficha, los días que lleva guardada sin estrenar, lo poco que aplicas esa categoría, la facilidad del paso y las veces que ya te lo ofreció. Cuatro respuestas: hecho, otro, ahora no (lo aparta dos días) o no aplica (lo retira).
+- **Aplicar esto** — los cinco pasos, marcables, arriba del todo en cada ficha, con barra de progreso. Al exportar a Markdown viajan con su estado real (`- [x]`).
+- **📊 Insights, en dos mitades** — *Guardado* (categorías, fuentes, fiabilidad: la radiografía de lo que consumes) y ***Aplicado*** (tasa de aplicación por categoría, el hueco entre lo que ocupa cada tema en tu biblioteca y lo que de verdad usas de él, racha, latencia hasta el primer paso, fichas zombi y las fichas que más te han servido). La lectura crítica es por reglas locales y deliberadamente incómoda.
 
 ## Privacidad por diseño
 
@@ -42,7 +56,7 @@ Al fundir, si una ficha ya existe se conserva la **versión más reciente** (por
 
 ```bash
 npm install
-npm run dev      # desarrollo en http://localhost:5173
+npm run dev      # desarrollo en http://localhost:5177
 npm run build    # comprobación de tipos + build de producción en dist/
 npm run preview  # servir el build
 ```
@@ -62,11 +76,14 @@ src/
 │   ├── schema.ts     # responseSchema → Gemini SIEMPRE devuelve JSON válido
 │   └── prompt.ts     # El prompt maestro del analista
 ├── services/
-│   ├── analyzer.ts   # Conectores de fuente (video | youtube | texto) → Gemini
-│   ├── db.ts         # Repositorio IndexedDB
+│   ├── analyzer.ts   # Conectores de fuente (video | youtube | instagram | texto) → Gemini
+│   ├── db.ts         # Repositorio IndexedDB (fichas + micropasos)
+│   ├── steps.ts      # Capa de práctica: estado de cada micropaso y el Dado
+│   ├── analytics.ts  # Estadísticas de aplicación y lectura crítica por reglas
 │   ├── apiKey.ts     # Gestión y validación de la clave
 │   └── exporters.ts  # Destinos: Markdown (Obsidian), JSON
-└── ui/               # Onboarding · Biblioteca · Importar · Ficha · Ajustes
+└── ui/               # Onboarding · Biblioteca · Práctica · Importar · Ficha · Insights · Ajustes
+    └── icons.tsx     # Set de iconos propio (sin emoji: se ven igual en todos los sistemas)
 ```
 
 Añadir una fuente nueva (podcast, PDF, URL de artículo) = un caso más en `analyzer.ts`. Añadir un destino (Notion, Google Drive) = un exportador más.
@@ -77,7 +94,8 @@ Cada análisis produce: título, resumen corto y detallado, idea principal, apre
 
 ## Hoja de ruta
 
-- **Fase 1 (este MVP)** ✅ — API key por usuario, análisis de vídeo/YouTube/texto, biblioteca buscable con filtros, edición, exportación Markdown/JSON, PWA instalable.
-- **Fase 2** — Compartir directo desde Instagram/la galería vía Web Share Target; PDFs e imágenes como fuente; extractor de URL enchufable (endpoint propio con yt-dlp para quien quiera montarlo).
-- **Fase 3** — Búsqueda semántica con embeddings (RAG local); colecciones y relaciones entre fichas.
-- **Fase 4** — Destinos: Notion, Obsidian vault, Google Drive; sincronización opcional entre dispositivos.
+- **Fase 1** ✅ — API key por usuario, análisis de vídeo/YouTube/texto, biblioteca buscable con filtros, edición, exportación Markdown/JSON, PWA instalable.
+- **Fase 2** ✅ — Reels de Instagram con companion local, cola móvil→PC vía Web Share Target, traspaso entre dispositivos por enlace y copia de seguridad.
+- **Fase 3 (actual)** ✅ — Capa de práctica: micropasos con estado, el Dado, checklist marcable e Insights partido en Guardado / Aplicado.
+- **Siguiente** — PDFs e imágenes como fuente; minutos estimados por micropaso para filtrar por tiempo disponible.
+- **Más adelante** — Búsqueda semántica con embeddings (RAG local); colecciones y relaciones entre fichas; destinos: Notion, Obsidian vault, Google Drive.

@@ -6,6 +6,7 @@ import { buildSyncLink } from '../services/sync';
 import { listQueue, mergeQueue } from '../services/queue';
 import { importSteps, listSteps } from '../services/steps';
 import type { KnowledgeCard } from '../domain/types';
+import { IconDownload, IconLink, IconUpload } from './icons';
 
 export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void }) {
   const [key, setKey] = useState('');
@@ -171,7 +172,9 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
           cuando quieras volver a pasar novedades.
         </p>
         <div className="settings-row" style={{ marginTop: 10 }}>
-          <button className="btn" onClick={() => syncLink(false)}>🔗 Copiar enlace</button>
+          <button className="btn" onClick={() => syncLink(false)}>
+            <IconLink size={16} /> Copiar enlace
+          </button>
           {'share' in navigator && (
             <button className="btn" onClick={() => syncLink(true)}>📤 Enviar a otro dispositivo</button>
           )}
@@ -200,8 +203,12 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
           sin borrar lo que ya tengas.
         </p>
         <div className="settings-row" style={{ marginTop: 10 }}>
-          <button className="btn" onClick={exportLibrary}>⬇️ Descargar copia de seguridad</button>
-          <button className="btn" onClick={() => importInput.current?.click()}>⬆️ Cargar copia</button>
+          <button className="btn" onClick={exportLibrary}>
+            <IconDownload size={16} /> Descargar copia de seguridad
+          </button>
+          <button className="btn" onClick={() => importInput.current?.click()}>
+            <IconUpload size={16} /> Cargar copia
+          </button>
           <input
             ref={importInput}
             type="file"

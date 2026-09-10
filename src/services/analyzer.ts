@@ -1,4 +1,4 @@
-import { GoogleGenAI, createPartFromUri, type Part } from '@google/genai';
+import type { GoogleGenAI, Part } from '@google/genai';
 import { ANALYST_PROMPT } from '../domain/prompt';
 import { cardAnalysisSchema } from '../domain/schema';
 import type { CardAnalysis, KnowledgeCard, SourceRef } from '../domain/types';
@@ -29,12 +29,19 @@ export const STAGE_LABELS: Record<Stage, string> = {
 /** Por debajo de este tamaño el vídeo viaja inline; por encima, vía Files API. */
 const INLINE_LIMIT = 15 * 1024 * 1024;
 
+/**
+ * El SDK de Gemini pesa ~350 kB y solo hace falta al analizar, no al abrir la
+ * app. Se carga a demanda; el navegador cachea el módulo tras la primera vez.
+ */
+const genai = () => import('@google/genai');
+
 export async function analyze(
   apiKey: string,
   model: string,
   input: AnalysisInput,
   onStage: (stage: Stage) => void
 ): Promise<KnowledgeCard> {
+  const { GoogleGenAI } = await genai();
   const ai = new GoogleGenAI({ apiKey });
 
   onStage('preparando');
@@ -126,6 +133,7 @@ async function videoParts(ai: GoogleGenAI, file: File, onStage: (stage: Stage) =
   if (uploaded.state === 'FAILED' || !uploaded.uri) {
     throw new Error('Gemini no pudo procesar el vídeo. Prueba con otro formato (MP4 recomendado).');
   }
+  const { createPartFromUri } = await genai();
   return [createPartFromUri(uploaded.uri, uploaded.mimeType ?? mimeType)];
 }
 
