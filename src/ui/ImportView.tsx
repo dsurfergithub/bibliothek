@@ -2,17 +2,23 @@ import { useEffect, useRef, useState } from 'react';
 import { analyze, humanizeError, STAGE_LABELS, type AnalysisInput, type Stage } from '../services/analyzer';
 import { getApiKey, getModel } from '../services/apiKey';
 import { companionOnline } from '../services/companion';
-import { listCards, saveCard } from '../services/db';
-import { buildSyncLink } from '../services/sync';
-import { dequeue, enqueue, listQueue, shortcodeOf, type PendingReel } from '../services/queue';
-import { IconAdd, IconCheck, IconFilm, SourceIcon } from './icons';
+import { saveCard } from '../services/db';
+import {
+  buildQueueLink,
+  dequeue,
+  enqueueMany,
+  extractAllInstagramUrls,
+  listQueue,
+  shortcodeOf,
+  type PendingReel,
+} from '../services/queue';
+import { IconAdd, IconBolt, IconCheck, IconClose, IconFilm, IconShare, SourceIcon } from './icons';
 import type { KnowledgeCard } from '../domain/types';
 
 type Mode = 'video' | 'youtube' | 'instagram' | 'texto';
 
 const STAGE_ORDER: Stage[] = ['preparando', 'descargando', 'subiendo', 'procesando', 'analizando', 'guardando'];
 
-const IG_URL = /^https?:\/\/(www\.)?instagram\.com\/([\w.]+\/)?(reel|reels|p|tv)\//;
 
 interface BatchProgress {
   total: number;
@@ -21,10 +27,13 @@ interface BatchProgress {
 
 export function ImportView({
   startTab,
+  initialNotice,
   onSaved,
   onBatchDone,
 }: {
   startTab?: 'instagram';
+  /** Aviso con el que se entra (p. ej. los reels que acaba de traer un enlace). */
+  initialNotice?: string;
   onSaved: (card: KnowledgeCard) => void;
   onBatchDone?: () => void;
 }) {
@@ -35,7 +44,7 @@ export function ImportView({
   const [text, setText] = useState('');
   const [stage, setStage] = useState<Stage | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(initialNotice ?? null);
   const [drag, setDrag] = useState(false);
   /** null = comprobando; luego true/false según responda el compañero local. */
   const [companion, setCompanion] = useState<boolean | null>(null);
@@ -78,7 +87,9 @@ export function ImportView({
           ? { kind: 'texto', text }
           : null;
 
-  const igValid = IG_URL.test(igUrl.trim());
+  // El campo admite una URL o un pegote con muchas: lo que vale es cuántas hay.
+  const igUrls = extractAllInstagramUrls(igUrl);
+  const igValid = igUrls.length > 0;
 
   async function run() {
     if (!input) return;
@@ -104,9 +115,9 @@ export function ImportView({
     setError(null);
     setNotice(null);
     try {
-      const card = await analyze(apiKey, getModel(), { kind: 'instagram', url: igUrl.trim() }, setStage);
+      const card = await analyze(apiKey, getModel(), { kind: 'instagram', url: igUrls[0] }, setStage);
       await saveCard(card);
-      dequeue(igUrl.trim());
+      dequeue(igUrls[0]);
       setIgUrl('');
       refreshQueue();
       onSaved(card);
@@ -120,12 +131,13 @@ export function ImportView({
   function addToQueue() {
     setError(null);
     setNotice(null);
-    if (enqueue(igUrl)) {
+    const n = enqueueMany(igUrl);
+    if (n > 0) {
       setIgUrl('');
       refreshQueue();
-      setNotice('Reel guardado en la cola.');
+      setNotice(n === 1 ? 'Reel guardado en la cola.' : `${n} reels guardados en la cola.`);
     } else {
-      setError('No parece un reel de Instagram válido, o ya está en la cola.');
+      setError('No hay ningún reel de Instagram nuevo ahí: o no es válido, o ya está en la cola.');
     }
   }
 
@@ -163,24 +175,31 @@ export function ImportView({
     onBatchDone?.();
   }
 
-  /** Móvil: envía la cola (dentro del enlace de sync) al PC. */
+  /**
+   * Móvil → PC: enlace con SOLO la cola. Antes metía la biblioteca entera y a
+   * partir de unas pocas fichas se pasaba del límite, obligando a exportar un
+   * archivo de copia. Ahora son shortcodes de 11 caracteres: siempre cabe.
+   */
   async function sendToPc() {
     setError(null);
     setNotice(null);
     setLinkOut(null);
     try {
-      const link = await buildSyncLink(await listCards());
-      if (link.length > 100_000) {
-        setError('Hay demasiados datos para un enlace. Procesa parte de la cola o usa Exportar en Ajustes.');
-        return;
-      }
+      const link = buildQueueLink(queue);
+      const n = queue.length;
       if (navigator.share) {
-        await navigator.share({ title: 'Bibliotheke — reels para procesar', url: link }).catch(() => {});
-        return;
+        try {
+          await navigator.share({ title: 'Bibliotheke — reels para procesar', url: link });
+          return;
+        } catch (err) {
+          // Si el usuario cancela el diálogo no hay nada que hacer; si falla por
+          // otro motivo, caemos al portapapeles.
+          if ((err as Error)?.name === 'AbortError') return;
+        }
       }
       try {
         await navigator.clipboard.writeText(link);
-        setNotice('Enlace copiado. Ábrelo en tu PC (con el compañero abierto) para procesar los reels.');
+        setNotice(`Enlace con ${n} reel${n === 1 ? '' : 's'} copiado. Ábrelo en el PC con el compañero en marcha.`);
       } catch {
         setLinkOut(link);
       }
@@ -320,27 +339,31 @@ export function ImportView({
       {mode === 'instagram' && (
         <>
           <div className="field" style={{ marginBottom: 10 }}>
-            <label>URL del Reel de Instagram</label>
-            <input
-              className="input"
-              type="url"
+            <label htmlFor="ig-url">URL del reel — o varias de golpe, una por línea</label>
+            <textarea
+              id="ig-url"
+              className="textarea"
+              style={{ minHeight: 82 }}
               placeholder="https://www.instagram.com/reel/…"
               value={igUrl}
               onChange={(e) => setIgUrl(e.target.value)}
             />
+            {igUrls.length > 1 && (
+              <p className="hint" style={{ marginTop: 6 }}>{igUrls.length} reels detectados.</p>
+            )}
           </div>
 
           {companion === true && (
             <>
               <p className="hint" style={{ marginBottom: 10 }}>
-                ✅ Compañero detectado en este equipo: puedes analizar el reel ahora mismo.
+Compañero detectado en este equipo: puedes analizar el reel ahora mismo.
               </p>
               <div className="settings-row">
                 <button className="btn primary" disabled={!igValid} onClick={analyzeNow}>
                   <IconAdd size={17} /> Analizar ahora
                 </button>
                 <button className="btn" disabled={!igValid} onClick={addToQueue}>
-                  ➕ A la cola
+                  <IconAdd size={16} /> A la cola
                 </button>
               </div>
             </>
@@ -356,10 +379,10 @@ export function ImportView({
               </div>
               <div className="settings-row" style={{ marginTop: 10 }}>
                 <button className="btn primary" disabled={!igValid} onClick={addToQueue}>
-                  ➕ Guardar reel en la cola
+                  <IconAdd size={17} /> Guardar en la cola
                 </button>
                 <button className="btn" onClick={recheckCompanion} disabled={rechecking}>
-                  {rechecking ? 'Comprobando…' : '🔄 Volver a comprobar'}
+                  {rechecking ? 'Comprobando…' : 'Volver a comprobar'}
                 </button>
               </div>
 
@@ -427,24 +450,30 @@ export function ImportView({
                 {queue.map((r) => (
                   <li className="queue-item" key={r.url}>
                     <span className="queue-code">reel/{shortcodeOf(r.url)}</span>
-                    <button className="queue-remove" title="Quitar" onClick={() => removeFromQueue(r.url)}>
-                      ✕
+                    <button
+                      className="queue-remove"
+                      title="Quitar de la cola"
+                      aria-label={`Quitar ${shortcodeOf(r.url)} de la cola`}
+                      onClick={() => removeFromQueue(r.url)}
+                    >
+                      <IconClose size={15} />
                     </button>
                   </li>
                 ))}
               </ul>
               {companion === true ? (
                 <button className="btn primary" style={{ marginTop: 12 }} onClick={processQueue}>
-                  ⚡ Procesar {queue.length} reel(s) en este PC
+                  <IconBolt size={17} /> Procesar {queue.length} reel(s) en este PC
                 </button>
               ) : (
                 <>
                   <button className="btn primary" style={{ marginTop: 12 }} onClick={sendToPc}>
-                    📤 Enviar {queue.length} reel(s) al PC
+                    <IconShare size={17} /> Enviar {queue.length} reel(s) al PC
                   </button>
                   <p className="hint" style={{ marginTop: 8 }}>
-                    Genera un enlace con esta cola (y tu biblioteca). Ábrelo en tu PC con el compañero
-                    en marcha y pulsa «Procesar».
+                    Genera un enlace corto que lleva solo estos reels — no tu biblioteca, así que no
+                    se queda largo por muchos que añadas. Ábrelo en el PC con el compañero en marcha
+                    y pulsa «Procesar».
                   </p>
                 </>
               )}

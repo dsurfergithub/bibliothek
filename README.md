@@ -26,7 +26,7 @@ Biblioteca local buscable → exporta a Markdown (Obsidian) o JSON
 ```
 
 - **Vídeo de YouTube**: pega la URL y ya está — Gemini procesa vídeos de YouTube de forma nativa, sin descargar nada.
-- **Reel de Instagram**: pega la URL con el *companion* local abierto (servidor Node con yt-dlp en `companion/`), o sube el vídeo a mano. En el móvil, compartir un reel a la app lo deja en una cola que se procesa luego en el PC.
+- **Reel de Instagram**: pega la URL —o varias de golpe, una por línea— con el *companion* local abierto (servidor Node con yt-dlp en `companion/`), o sube el vídeo a mano. En el móvil, compartir un reel a la app lo deja en una cola que se procesa luego en el PC.
 - **Vídeo propio**: sube o arrastra el archivo.
 - **Texto**: pega artículos, hilos, newsletters o transcripciones.
 
@@ -51,6 +51,10 @@ El flujo típico: capturas reels en el móvil, los procesas en el PC (donde vive
 2. **Copia de seguridad (archivo `.json`)** — descarga un archivo con **fichas + cola** y guárdalo como respaldo (recomendado sobre todo en el móvil, donde el navegador puede vaciar el almacenamiento tras días sin abrir la app). «Cargar copia» la restaura fundiéndola con lo que tengas.
 
 Al fundir, si una ficha ya existe se conserva la **versión más reciente** (por fecha de edición); la cola se deduplica por reel.
+
+### Solo los reels: enlace corto
+
+Para el caso habitual —capturar reels en el móvil y procesarlos en el PC— no hace falta nada de lo anterior. En **Añadir → Instagram**, «Enviar al PC» genera un enlace que lleva **únicamente la cola**: los shortcodes de los reels, once caracteres cada uno. Doce reels caben en 172 caracteres, y cien en poco más de mil, así que nunca se pasa del límite de las apps de mensajería por muchos que acumules. Ábrelo en el PC (aunque la app ya esté abierta) y los reels entran en la cola solos.
 
 ## Desarrollo
 

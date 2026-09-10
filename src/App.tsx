@@ -4,7 +4,13 @@ import { getApiKey } from './services/apiKey';
 import { importCards, listCards } from './services/db';
 import { doneToday, ensureSteps, importSteps, listSteps } from './services/steps';
 import { clearSyncHash, decodeSyncPayload, pendingSyncPayload } from './services/sync';
-import { enqueue, mergeQueue } from './services/queue';
+import {
+  clearQueueHash,
+  enqueue,
+  mergeQueue,
+  mergeQueueFromPayload,
+  pendingQueuePayload,
+} from './services/queue';
 import { Onboarding } from './ui/Onboarding';
 import { Library } from './ui/Library';
 import { Practice } from './ui/Practice';
@@ -17,7 +23,7 @@ import { IconAdd, IconChart, IconDice, IconLibrary, IconSettings } from './ui/ic
 type View =
   | { name: 'library' }
   | { name: 'practice' }
-  | { name: 'import'; startTab?: 'instagram' }
+  | { name: 'import'; startTab?: 'instagram'; aviso?: string; nonce?: number }
   | { name: 'card'; id: string }
   | { name: 'insights' }
   | { name: 'settings' };
@@ -72,6 +78,35 @@ export default function App() {
       });
   }, [refresh]);
 
+  // ¿Venimos de un enlace de reels (#reels=)? Es el traspaso ligero móvil→PC:
+  // solo shortcodes, sin biblioteca, así que nunca se pasa de largo.
+  //
+  // Se escucha también `hashchange`: si la app ya está abierta en el PC, pegar
+  // el enlace en la barra de direcciones cambia el fragmento SIN recargar, y
+  // sin esto no pasaría nada.
+  useEffect(() => {
+    function absorberReels() {
+      const payload = pendingQueuePayload();
+      if (!payload) return;
+      clearQueueHash();
+      const n = mergeQueueFromPayload(payload);
+      setView({
+        name: 'import',
+        startTab: 'instagram',
+        // Fuerza el remontaje de ImportView: sin él, ni se vería el aviso ni se
+        // refrescaría la lista de la cola si la vista ya estaba abierta.
+        nonce: Date.now(),
+        aviso:
+          n > 0
+            ? `${n} reel${n === 1 ? '' : 's'} añadido${n === 1 ? '' : 's'} a la cola. Con el compañero abierto ya puedes procesarlos.`
+            : 'Ese enlace no traía reels nuevos: ya estaban todos en la cola.',
+      });
+    }
+    absorberReels();
+    window.addEventListener('hashchange', absorberReels);
+    return () => window.removeEventListener('hashchange', absorberReels);
+  }, []);
+
   // ¿Nos han compartido un reel desde Instagram (share_target del PWA)?
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -124,7 +159,9 @@ export default function App() {
         )}
         {view.name === 'import' && (
           <ImportView
+            key={view.nonce ?? 'import'}
             startTab={view.startTab}
+            initialNotice={view.aviso}
             onSaved={(card) => {
               void refresh();
               setView({ name: 'card', id: card.id });

@@ -6,7 +6,7 @@ import { buildSyncLink } from '../services/sync';
 import { listQueue, mergeQueue } from '../services/queue';
 import { importSteps, listSteps } from '../services/steps';
 import type { KnowledgeCard } from '../domain/types';
-import { IconDownload, IconLink, IconUpload } from './icons';
+import { IconDownload, IconLink, IconShare, IconUpload } from './icons';
 
 export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void }) {
   const [key, setKey] = useState('');
@@ -171,12 +171,19 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
           con lo que ya tengas, sin borrar nada. Envíatelo por WhatsApp, Telegram o email. Repite
           cuando quieras volver a pasar novedades.
         </p>
+        <p className="hint" style={{ marginTop: 8 }}>
+          Para mandar <strong>solo reels</strong> del móvil al PC no hace falta esto: en{' '}
+          <strong>Añadir → Instagram</strong>, el botón «Enviar al PC» genera un enlace corto que
+          lleva únicamente la cola, sin la biblioteca, y por tanto nunca se queda largo.
+        </p>
         <div className="settings-row" style={{ marginTop: 10 }}>
           <button className="btn" onClick={() => syncLink(false)}>
             <IconLink size={16} /> Copiar enlace
           </button>
           {'share' in navigator && (
-            <button className="btn" onClick={() => syncLink(true)}>📤 Enviar a otro dispositivo</button>
+            <button className="btn" onClick={() => syncLink(true)}>
+              <IconShare size={16} /> Enviar a otro dispositivo
+            </button>
           )}
         </div>
         {linkOut && (

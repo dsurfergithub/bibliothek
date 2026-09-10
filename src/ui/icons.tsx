@@ -135,6 +135,12 @@ export const IconTrash = (p: IconProps) => (
   </Icon>
 );
 
+export const IconClose = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="m6.5 6.5 11 11M17.5 6.5l-11 11" />
+  </Icon>
+);
+
 export const IconBack = (p: IconProps) => (
   <Icon {...p}>
     <path d="M14.5 5.5 8 12l6.5 6.5" />
