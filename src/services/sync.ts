@@ -59,13 +59,50 @@ export async function buildSyncLink(
   desde = 0
 ): Promise<string> {
   const sel = desde > 0 ? changesSince(cards, steps, desde) : { cards, steps };
-  const json = JSON.stringify({
-    app: 'bibliotheke',
-    version: 2,
-    cards: sel.cards,
-    steps: sel.steps,
-    queue: listQueue(),
-  });
+  return encodeLink(sel.cards, sel.steps, listQueue());
+}
+
+/**
+ * Tope por enlace. WhatsApp corta los mensajes en 65.536 caracteres y es el
+ * canal habitual; por encima el enlace llega roto y el móvil no carga nada.
+ */
+export const MAX_LINK_CHARS = 60_000;
+
+/**
+ * Como `buildSyncLink`, pero si no cabe en un enlace parte la biblioteca en
+ * varios, cada uno autocontenido (sus fichas + sus pasos) y por debajo del
+ * tope. Al abrirlos en el otro dispositivo se funden: el orden da igual. La
+ * cola de reels viaja solo en el primero. Antes, una biblioteca grande que
+ * nunca se había enviado simplemente no se podía pasar por enlace.
+ */
+export async function buildSyncLinks(
+  cards: KnowledgeCard[],
+  steps: StepRecord[] = [],
+  desde = 0,
+  maxLen = MAX_LINK_CHARS
+): Promise<string[]> {
+  const sel = desde > 0 ? changesSince(cards, steps, desde) : { cards, steps };
+  const out: string[] = [];
+  // Divide por la mitad hasta que cada trozo quepa. Los pasos van con su ficha;
+  // los que no tienen ficha en el lote (solo cambió su estado) caen al último.
+  async function emit(cs: KnowledgeCard[], sts: StepRecord[], q: PendingReel[]): Promise<void> {
+    const link = await encodeLink(cs, sts, q);
+    if (link.length <= maxLen || cs.length <= 1) {
+      out.push(link);
+      return;
+    }
+    const mid = Math.ceil(cs.length / 2);
+    const a = cs.slice(0, mid);
+    const ids = new Set(a.map((c) => c.id));
+    await emit(a, sts.filter((s) => ids.has(s.cardId)), q);
+    await emit(cs.slice(mid), sts.filter((s) => !ids.has(s.cardId)), []);
+  }
+  await emit(sel.cards, sel.steps, listQueue());
+  return out;
+}
+
+async function encodeLink(cards: KnowledgeCard[], steps: StepRecord[], queue: PendingReel[]): Promise<string> {
+  const json = JSON.stringify({ app: 'bibliotheke', version: 2, cards, steps, queue });
   const gz = await pipe(new TextEncoder().encode(json), new CompressionStream('gzip'));
   return `${location.origin}${location.pathname}${PREFIX}${toBase64Url(gz)}`;
 }

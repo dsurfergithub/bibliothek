@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { getApiKey, getModel, MODELS, setApiKey, setModel, validateApiKey } from '../services/apiKey';
 import { clearAll, importCards, listCards } from '../services/db';
 import { downloadText } from '../services/exporters';
-import { buildSyncLink, changesSince, lastSyncOut, markSyncOut } from '../services/sync';
+import { buildSyncLinks, changesSince, lastSyncOut, markSyncOut } from '../services/sync';
 import { copyLink, shareOrCopyLink } from '../services/share';
 import { listQueue, mergeQueue, pruneQueueByCards } from '../services/queue';
 import { importSteps, listSteps } from '../services/steps';
@@ -26,10 +26,12 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
    * antes, el gesto caducaría y no pasaría nada. Así el toque no espera nada.
    */
   const [prep, setPrep] = useState<{
-    full: { link: string; cards: number; steps: number };
-    inc: { link: string; cards: number; steps: number } | null;
+    full: { links: string[]; cards: number; steps: number };
+    inc: { links: string[]; cards: number; steps: number } | null;
     nReels: number;
   } | null>(null);
+  /** Partes ya copiadas/enviadas de un envío en varios enlaces (ver `buildSyncLinks`). */
+  const [parteState, setParteState] = useState<{ inc: boolean; i: number }>({ inc: true, i: 0 });
 
   // Cuánto habría que mandar si enviases ahora solo lo nuevo, y los enlaces listos.
   useEffect(() => {
@@ -38,14 +40,15 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
       const [cards, steps] = await Promise.all([listCards(), listSteps()]);
       const d = ultimoEnvio > 0 ? changesSince(cards, steps, ultimoEnvio) : null;
       const [full, inc] = await Promise.all([
-        buildSyncLink(cards, steps, 0),
-        d ? buildSyncLink(cards, steps, ultimoEnvio) : Promise.resolve(null),
+        buildSyncLinks(cards, steps, 0),
+        d ? buildSyncLinks(cards, steps, ultimoEnvio) : Promise.resolve(null),
       ]);
       if (!vivo) return;
       setNovedades(d ? { cards: d.cards.length, steps: d.steps.length } : null);
+      setParteState({ inc: true, i: 0 });
       setPrep({
-        full: { link: full, cards: cards.length, steps: steps.length },
-        inc: d && inc ? { link: inc, cards: d.cards.length, steps: d.steps.length } : null,
+        full: { links: full, cards: cards.length, steps: steps.length },
+        inc: d && inc ? { links: inc, cards: d.cards.length, steps: d.steps.length } : null,
         nReels: listQueue().length,
       });
     })().catch(() => {
@@ -135,18 +138,11 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
       return;
     }
 
-    // Más allá de ~100k caracteres los enlaces se truncan en apps de mensajería.
-    if (sel.link.length > 100_000) {
-      setSyncMsg({
-        kind: 'error',
-        text:
-          desde > 0
-            ? 'Incluso enviando solo lo nuevo hay demasiado para un enlace. Usa la copia de seguridad de abajo.'
-            : 'Tu biblioteca entera no cabe en un enlace. Envía solo lo nuevo, o usa la copia de seguridad de abajo.',
-      });
-      return;
-    }
-
+    const n = sel.links.length;
+    // El contador de partes es de UN envío: cambiar de «lo nuevo» a «todo» lo reinicia.
+    const i = parteState.inc === incremental ? Math.min(parteState.i, n - 1) : 0;
+    const link = sel.links[i];
+    const ultima = i === n - 1;
     const resumen = [
       sel.cards ? `${sel.cards} ficha${sel.cards === 1 ? '' : 's'}` : '',
       prep.nReels ? `${prep.nReels} reel${prep.nReels === 1 ? '' : 's'} en cola` : '',
@@ -155,29 +151,36 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
       .join(' + ');
 
     const ahora = Date.now();
-    const outcome = viaShare ? await shareOrCopyLink('Bibliotheke', sel.link) : await copyLink(sel.link);
-    switch (outcome) {
-      case 'cancelled':
-        return;
-      case 'shared':
-        markSyncOut(ahora);
-        setUltimoEnvio(ahora);
-        setSyncMsg({ kind: 'ok', text: `Enlace enviado (${resumen}).` });
-        return;
-      case 'copied':
-        markSyncOut(ahora);
-        setUltimoEnvio(ahora);
-        setSyncMsg({
-          kind: 'ok',
-          text: `Enlace copiado (${resumen}). Ábrelo en el otro dispositivo para cargarlo.`,
-        });
-        return;
-      case 'manual':
-        // Sin permiso de portapapeles: se muestra para copiarlo a mano. No se
-        // marca como enviado porque no sabemos si llegó a copiarlo.
-        setLinkOut(sel.link);
-        return;
+    const outcome = viaShare ? await shareOrCopyLink('Bibliotheke', link) : await copyLink(link);
+    if (outcome === 'cancelled') return;
+    if (outcome === 'manual') {
+      // Sin permiso de portapapeles: se muestra para copiarlo a mano. No se
+      // marca como enviado porque no sabemos si llegó a copiarlo.
+      setLinkOut(link);
+      return;
     }
+    const verbo = outcome === 'shared' ? 'enviado' : 'copiado';
+    if (n === 1) {
+      markSyncOut(ahora);
+      setUltimoEnvio(ahora);
+      setSyncMsg({
+        kind: 'ok',
+        text: `Enlace ${verbo} (${resumen}). Ábrelo en el otro dispositivo para cargarlo.`,
+      });
+      return;
+    }
+    // Varios enlaces: solo cuenta como enviado cuando ha salido la última parte.
+    if (ultima) {
+      markSyncOut(ahora);
+      setUltimoEnvio(ahora);
+      setSyncMsg({ kind: 'ok', text: `Parte ${n} de ${n} (última) ${verbo === 'enviado' ? 'enviada' : 'copiada'}. Con esta, ${resumen} en total.` });
+      return;
+    }
+    setParteState({ inc: incremental, i: i + 1 });
+    setSyncMsg({
+      kind: 'ok',
+      text: `Parte ${i + 1} de ${n} ${verbo === 'enviado' ? 'enviada' : 'copiada'}. Ábrela en el otro dispositivo y vuelve a pulsar para la parte ${i + 2}.`,
+    });
   }
 
   async function wipe() {
@@ -186,6 +189,10 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
     onLibraryChanged();
     setMsg({ kind: 'ok', text: 'Biblioteca vaciada.' });
   }
+
+  // Enlaces que tocará copiar para el envío que hacen los botones principales.
+  const partes = prep ? (ultimoEnvio > 0 && prep.inc ? prep.inc : prep.full).links.length : 1;
+  const parte = parteState.inc ? parteState.i : 0;
 
   return (
     <div>
@@ -261,13 +268,24 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
             .
           </p>
         )}
+        {partes > 1 && (
+          <p className="hint" style={{ marginTop: 8 }}>
+            {ultimoEnvio > 0 ? 'Lo nuevo' : 'Tu biblioteca'} no cabe en un enlace: va en <strong>{partes} partes</strong>.
+            Copia o envía una, ábrela en el otro dispositivo y vuelve a pulsar para la siguiente. El orden da igual.
+          </p>
+        )}
         <div className="settings-row" style={{ marginTop: 10 }}>
           <button className="btn primary" onClick={() => syncLink(false, true)}>
-            <IconLink size={16} /> {ultimoEnvio > 0 ? 'Copiar lo nuevo' : 'Copiar enlace'}
+            <IconLink size={16} />{' '}
+            {partes > 1
+              ? `Copiar parte ${Math.min(parte, partes - 1) + 1} de ${partes}`
+              : ultimoEnvio > 0
+                ? 'Copiar lo nuevo'
+                : 'Copiar enlace'}
           </button>
           {'share' in navigator && (
             <button className="btn" onClick={() => syncLink(true, true)}>
-              <IconShare size={16} /> Enviar
+              <IconShare size={16} /> {partes > 1 ? `Enviar parte ${Math.min(parte, partes - 1) + 1}` : 'Enviar'}
             </button>
           )}
           {ultimoEnvio > 0 && (
