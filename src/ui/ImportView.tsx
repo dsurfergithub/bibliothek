@@ -4,6 +4,7 @@ import { getApiKey, getModel } from '../services/apiKey';
 import { companionOnline } from '../services/companion';
 import { listCards, saveCard } from '../services/db';
 import { buildSyncLink } from '../services/sync';
+import { shareOrCopyLink } from '../services/share';
 import { listSteps } from '../services/steps';
 import {
   buildQueueLink,
@@ -55,7 +56,12 @@ export function ImportView({
   const [batch, setBatch] = useState<BatchProgress | null>(null);
   const [batchResult, setBatchResult] = useState<{ ok: number; errors: string[] } | null>(null);
   const [linkOut, setLinkOut] = useState<string | null>(null);
-  const [batchStart, setBatchStart] = useState(0);
+  /**
+   * Enlace de vuelta al móvil, generado al acabar el lote y no al pulsar:
+   * iOS Safari solo deja compartir dentro del toque, y leer la BD + comprimir
+   * antes lo haría caducar.
+   */
+  const [returnLink, setReturnLink] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const busy = stage !== null;
@@ -158,24 +164,20 @@ export function ImportView({
   async function devolverAlMovil() {
     setError(null);
     setLinkOut(null);
-    try {
-      const link = await buildSyncLink(await listCards(), await listSteps(), batchStart);
-      if (navigator.share) {
-        try {
-          await navigator.share({ title: 'Bibliotheke — fichas nuevas', url: link });
-          return;
-        } catch (err) {
-          if ((err as Error)?.name === 'AbortError') return;
-        }
-      }
-      try {
-        await navigator.clipboard.writeText(link);
-        setNotice('Enlace copiado. Ábrelo en el móvil y las fichas nuevas se cargan ahí.');
-      } catch {
-        setLinkOut(link);
-      }
-    } catch {
+    if (!returnLink) {
       setError('No se pudo generar el enlace de vuelta.');
+      return;
+    }
+    switch (await shareOrCopyLink('Bibliotheke — fichas nuevas', returnLink)) {
+      case 'shared':
+        setNotice('Enlace enviado. Ábrelo en el móvil y las fichas nuevas se cargan ahí.');
+        return;
+      case 'copied':
+        setNotice('Enlace copiado. Ábrelo en el móvil y las fichas nuevas se cargan ahí.');
+        return;
+      case 'manual':
+        setLinkOut(returnLink);
+        return;
     }
   }
 
@@ -188,9 +190,9 @@ export function ImportView({
     setError(null);
     setNotice(null);
     setBatchResult(null);
+    setReturnLink(null);
     // Marca desde la que se calcula «lo que ha salido de este lote».
     const inicio = Date.now();
-    setBatchStart(inicio);
     const errors: string[] = [];
     let ok = 0;
     for (let i = 0; i < items.length; i++) {
@@ -208,6 +210,13 @@ export function ImportView({
     setBatch(null);
     refreshQueue();
     setBatchResult({ ok, errors });
+    if (ok > 0) {
+      try {
+        setReturnLink(await buildSyncLink(await listCards(), await listSteps(), inicio));
+      } catch {
+        setReturnLink(null);
+      }
+    }
     onBatchDone?.();
   }
 
@@ -220,27 +229,25 @@ export function ImportView({
     setError(null);
     setNotice(null);
     setLinkOut(null);
+    let link: string;
     try {
-      const link = buildQueueLink(queue);
-      const n = queue.length;
-      if (navigator.share) {
-        try {
-          await navigator.share({ title: 'Bibliotheke — reels para procesar', url: link });
-          return;
-        } catch (err) {
-          // Si el usuario cancela el diálogo no hay nada que hacer; si falla por
-          // otro motivo, caemos al portapapeles.
-          if ((err as Error)?.name === 'AbortError') return;
-        }
-      }
-      try {
-        await navigator.clipboard.writeText(link);
-        setNotice(`Enlace con ${n} reel${n === 1 ? '' : 's'} copiado. Ábrelo en el PC con el compañero en marcha.`);
-      } catch {
-        setLinkOut(link);
-      }
+      link = buildQueueLink(queue);
     } catch {
       setError('No se pudo generar el enlace.');
+      return;
+    }
+    const n = queue.length;
+    const reels = `${n} reel${n === 1 ? '' : 's'}`;
+    switch (await shareOrCopyLink('Bibliotheke — reels para procesar', link)) {
+      case 'shared':
+        setNotice(`Enlace con ${reels} enviado. Ábrelo en el PC con el compañero en marcha.`);
+        return;
+      case 'copied':
+        setNotice(`Enlace con ${reels} copiado. Ábrelo en el PC con el compañero en marcha.`);
+        return;
+      case 'manual':
+        setLinkOut(link);
+        return;
     }
   }
 

@@ -3,6 +3,7 @@ import { getApiKey, getModel, MODELS, setApiKey, setModel, validateApiKey } from
 import { clearAll, importCards, listCards } from '../services/db';
 import { downloadText } from '../services/exporters';
 import { buildSyncLink, changesSince, lastSyncOut, markSyncOut } from '../services/sync';
+import { copyLink, shareOrCopyLink } from '../services/share';
 import { listQueue, mergeQueue, pruneQueueByCards } from '../services/queue';
 import { importSteps, listSteps } from '../services/steps';
 import type { KnowledgeCard } from '../domain/types';
@@ -17,18 +18,38 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
   const importInput = useRef<HTMLInputElement>(null);
   const [ultimoEnvio, setUltimoEnvio] = useState(() => lastSyncOut());
   const [novedades, setNovedades] = useState<{ cards: number; steps: number } | null>(null);
+  /** Feedback de los botones de enlace, pintado junto a ellos (no arriba de la página). */
+  const [syncMsg, setSyncMsg] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  /**
+   * Enlaces YA generados al entrar en Ajustes. iOS Safari solo deja compartir o
+   * copiar dentro del toque: si el botón tuviera que leer la BD y comprimir
+   * antes, el gesto caducaría y no pasaría nada. Así el toque no espera nada.
+   */
+  const [prep, setPrep] = useState<{
+    full: { link: string; cards: number; steps: number };
+    inc: { link: string; cards: number; steps: number } | null;
+    nReels: number;
+  } | null>(null);
 
-  // Cuánto habría que mandar si enviases ahora solo lo nuevo.
+  // Cuánto habría que mandar si enviases ahora solo lo nuevo, y los enlaces listos.
   useEffect(() => {
-    if (ultimoEnvio <= 0) {
-      setNovedades(null);
-      return;
-    }
     let vivo = true;
-    Promise.all([listCards(), listSteps()]).then(([c, st]) => {
+    (async () => {
+      const [cards, steps] = await Promise.all([listCards(), listSteps()]);
+      const d = ultimoEnvio > 0 ? changesSince(cards, steps, ultimoEnvio) : null;
+      const [full, inc] = await Promise.all([
+        buildSyncLink(cards, steps, 0),
+        d ? buildSyncLink(cards, steps, ultimoEnvio) : Promise.resolve(null),
+      ]);
       if (!vivo) return;
-      const d = changesSince(c, st, ultimoEnvio);
-      setNovedades({ cards: d.cards.length, steps: d.steps.length });
+      setNovedades(d ? { cards: d.cards.length, steps: d.steps.length } : null);
+      setPrep({
+        full: { link: full, cards: cards.length, steps: steps.length },
+        inc: d && inc ? { link: inc, cards: d.cards.length, steps: d.steps.length } : null,
+        nReels: listQueue().length,
+      });
+    })().catch(() => {
+      if (vivo) setSyncMsg({ kind: 'error', text: 'No se pudo generar el enlace.' });
     });
     return () => {
       vivo = false;
@@ -87,79 +108,75 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
     }
   }
 
-  /** Genera el enlace #sync= con la biblioteca + la cola y lo copia o comparte. */
   /**
-   * Genera el enlace de la biblioteca. Con `incremental`, solo viaja lo cambiado
-   * desde el último envío: es lo que evita que el enlace crezca sin parar hasta
-   * pasarse del límite de las apps de mensajería.
+   * Copia o comparte el enlace ya preparado (`prep`). Con `incremental`, solo
+   * viaja lo cambiado desde el último envío: es lo que evita que el enlace
+   * crezca sin parar hasta pasarse del límite de las apps de mensajería.
+   * Sin ningún `await` antes de compartir/copiar: ver `prep`.
    */
   async function syncLink(viaShare: boolean, incremental: boolean) {
-    setMsg(null);
+    setSyncMsg(null);
     setLinkOut(null);
-    try {
-      const desde = incremental ? lastSyncOut() : 0;
-      const cards = await listCards();
-      const steps = await listSteps();
-      const sel = desde > 0 ? changesSince(cards, steps, desde) : { cards, steps };
-      const nReels = listQueue().length;
+    if (!prep) {
+      setSyncMsg({ kind: 'error', text: 'Preparando el enlace… vuelve a pulsar en un segundo.' });
+      return;
+    }
+    const desde = incremental ? ultimoEnvio : 0;
+    const sel = desde > 0 && prep.inc ? prep.inc : prep.full;
 
-      if (sel.cards.length === 0 && sel.steps.length === 0 && nReels === 0) {
-        setMsg({
-          kind: 'error',
-          text:
-            desde > 0
-              ? 'No hay novedades desde tu último envío.'
-              : 'No hay fichas ni reels en cola: no hay nada que enviar.',
-        });
+    if (sel.cards === 0 && sel.steps === 0 && prep.nReels === 0) {
+      setSyncMsg({
+        kind: 'error',
+        text:
+          desde > 0
+            ? 'No hay novedades desde tu último envío.'
+            : 'No hay fichas ni reels en cola: no hay nada que enviar.',
+      });
+      return;
+    }
+
+    // Más allá de ~100k caracteres los enlaces se truncan en apps de mensajería.
+    if (sel.link.length > 100_000) {
+      setSyncMsg({
+        kind: 'error',
+        text:
+          desde > 0
+            ? 'Incluso enviando solo lo nuevo hay demasiado para un enlace. Usa la copia de seguridad de abajo.'
+            : 'Tu biblioteca entera no cabe en un enlace. Envía solo lo nuevo, o usa la copia de seguridad de abajo.',
+      });
+      return;
+    }
+
+    const resumen = [
+      sel.cards ? `${sel.cards} ficha${sel.cards === 1 ? '' : 's'}` : '',
+      prep.nReels ? `${prep.nReels} reel${prep.nReels === 1 ? '' : 's'} en cola` : '',
+    ]
+      .filter(Boolean)
+      .join(' + ');
+
+    const ahora = Date.now();
+    const outcome = viaShare ? await shareOrCopyLink('Bibliotheke', sel.link) : await copyLink(sel.link);
+    switch (outcome) {
+      case 'cancelled':
         return;
-      }
-
-      const link = await buildSyncLink(cards, steps, desde);
-      // Más allá de ~100k caracteres los enlaces se truncan en apps de mensajería.
-      if (link.length > 100_000) {
-        setMsg({
-          kind: 'error',
-          text:
-            desde > 0
-              ? 'Incluso enviando solo lo nuevo hay demasiado para un enlace. Usa la copia de seguridad de abajo.'
-              : 'Tu biblioteca entera no cabe en un enlace. Envía solo lo nuevo, o usa la copia de seguridad de abajo.',
-        });
-        return;
-      }
-
-      const ahora = Date.now();
-      if (viaShare && navigator.share) {
-        try {
-          await navigator.share({ title: 'Bibliotheke', url: link });
-          markSyncOut(ahora);
-          setUltimoEnvio(ahora);
-          return;
-        } catch (err) {
-          if ((err as Error)?.name === 'AbortError') return;
-        }
-      }
-
-      const resumen = [
-        sel.cards.length ? `${sel.cards.length} ficha${sel.cards.length === 1 ? '' : 's'}` : '',
-        nReels ? `${nReels} reel${nReels === 1 ? '' : 's'} en cola` : '',
-      ]
-        .filter(Boolean)
-        .join(' + ');
-      try {
-        await navigator.clipboard.writeText(link);
+      case 'shared':
         markSyncOut(ahora);
         setUltimoEnvio(ahora);
-        setMsg({
+        setSyncMsg({ kind: 'ok', text: `Enlace enviado (${resumen}).` });
+        return;
+      case 'copied':
+        markSyncOut(ahora);
+        setUltimoEnvio(ahora);
+        setSyncMsg({
           kind: 'ok',
           text: `Enlace copiado (${resumen}). Ábrelo en el otro dispositivo para cargarlo.`,
         });
-      } catch {
+        return;
+      case 'manual':
         // Sin permiso de portapapeles: se muestra para copiarlo a mano. No se
         // marca como enviado porque no sabemos si llegó a copiarlo.
-        setLinkOut(link);
-      }
-    } catch {
-      setMsg({ kind: 'error', text: 'No se pudo generar el enlace.' });
+        setLinkOut(sel.link);
+        return;
     }
   }
 
@@ -259,6 +276,11 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
             </button>
           )}
         </div>
+        {syncMsg && (
+          <div className={syncMsg.kind === 'ok' ? 'ok-box' : 'error-box'} style={{ marginTop: 12 }}>
+            {syncMsg.text}
+          </div>
+        )}
         {linkOut && (
           <div className="field" style={{ marginTop: 12, marginBottom: 0 }}>
             <label>No se pudo copiar automáticamente — copia el enlace a mano:</label>
