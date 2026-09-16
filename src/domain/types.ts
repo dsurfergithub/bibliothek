@@ -82,6 +82,18 @@ export interface KnowledgeCard extends CardAnalysis {
   fuente: SourceRef;
   /** Notas personales del usuario, editables. */
   notas: string;
+  /**
+   * Cuándo marcaste la ficha como vista/leída (ms epoch), independientemente
+   * de si la has aplicado. Sirve para repasar la biblioteca por temas sin
+   * perder el hilo de qué has revisado ya. Ausente = pendiente de ver.
+   */
+  vistoAt?: number;
+}
+
+/** URL de la fuente original si la referencia es un enlace (YouTube, Instagram). */
+export function sourceUrl(card: Pick<KnowledgeCard, 'fuente'>): string | null {
+  const ref = card.fuente?.referencia?.trim() ?? '';
+  return /^https?:\/\//i.test(ref) ? ref : null;
 }
 
 /**

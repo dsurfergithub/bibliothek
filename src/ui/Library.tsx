@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { KnowledgeCard, StepRecord } from '../domain/types';
 import { phaseOf, progressOf } from '../services/steps';
-import { IconAdd, IconBolt, IconSearch, ProgressRing, SourceIcon, Stars } from './icons';
+import { IconAdd, IconBolt, IconEye, IconSearch, ProgressRing, SourceIcon, Stars } from './icons';
 
 function matches(card: KnowledgeCard, q: string): boolean {
   const haystack = [
@@ -44,6 +44,7 @@ export function Library({
   const [categoria, setCategoria] = useState<string | null>(null);
   const [nivel, setNivel] = useState<string | null>(null);
   const [sinAplicar, setSinAplicar] = useState(false);
+  const [sinVer, setSinVer] = useState(false);
 
   const categorias = useMemo(
     () => [...new Set(cards.map((c) => c.categoria).filter(Boolean))].sort(),
@@ -55,10 +56,11 @@ export function Library({
       (!query.trim() || matches(c, query.trim())) &&
       (!categoria || c.categoria === categoria) &&
       (!nivel || c.nivel === nivel) &&
-      (!sinAplicar || phaseOf(steps, c.id) !== 'aplicada')
+      (!sinAplicar || phaseOf(steps, c.id) !== 'aplicada') &&
+      (!sinVer || !c.vistoAt)
   );
 
-  const hayFiltro = Boolean(categoria || nivel || sinAplicar || query.trim());
+  const hayFiltro = Boolean(categoria || nivel || sinAplicar || sinVer || query.trim());
 
   if (cards.length === 0) {
     return (
@@ -102,6 +104,9 @@ export function Library({
         >
           <IconBolt size={13} /> Sin aplicar
         </button>
+        <button className={`chip-filter ${sinVer ? 'on' : ''}`} onClick={() => setSinVer(!sinVer)} aria-pressed={sinVer}>
+          <IconEye size={13} /> Sin ver
+        </button>
         {categorias.map((cat) => (
           <button
             key={cat}
@@ -139,6 +144,7 @@ export function Library({
                 setCategoria(null);
                 setNivel(null);
                 setSinAplicar(false);
+                setSinVer(false);
               }}
             >
               Quitar filtros
@@ -158,6 +164,11 @@ export function Library({
                       <SourceIcon tipo={card.fuente.tipo} size={15} />
                     </span>
                     <span className="card-title">{card.titulo}</span>
+                    {card.vistoAt && (
+                      <span className="card-vista" title="Vista" aria-label="Vista">
+                        <IconEye size={14} />
+                      </span>
+                    )}
                     {hechos > 0 && <ProgressRing done={hechos} total={total} />}
                   </span>
                   <span className="card-summary">{card.resumenCorto}</span>

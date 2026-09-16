@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { LIST_SECTIONS, PRACTICE_KEYS, type KnowledgeCard, type StepRecord } from '../domain/types';
+import { LIST_SECTIONS, PRACTICE_KEYS, sourceUrl, type KnowledgeCard, type StepRecord } from '../domain/types';
 import { cardToMarkdown, downloadText, slugify } from '../services/exporters';
-import { deleteCard, saveCard } from '../services/db';
+import { deleteCard, saveCard, setVisto } from '../services/db';
 import { recordShare } from '../services/stats';
 import { setStepState, stepsOf } from '../services/steps';
 import {
@@ -11,6 +11,9 @@ import {
   IconCopy,
   IconDownload,
   IconEdit,
+  IconExternal,
+  IconEye,
+  IconEyeOff,
   IconShare,
   IconTrash,
   IconWarning,
@@ -21,12 +24,14 @@ import {
 export function CardDetail({
   card,
   steps,
+  backLabel = 'Biblioteca',
   onBack,
   onChanged,
   onStepsChanged,
 }: {
   card: KnowledgeCard;
   steps: StepRecord[];
+  backLabel?: string;
   onBack: () => void;
   onChanged: (card: KnowledgeCard | null) => void;
   onStepsChanged: () => void;
@@ -36,6 +41,12 @@ export function CardDetail({
   const [abierta, setAbierta] = useState(false);
   const e = card.evaluacion;
   const pasos = stepsOf(steps, card.id);
+  const url = sourceUrl(card);
+  const vista = Boolean(card.vistoAt);
+
+  async function toggleVista() {
+    onChanged(await setVisto(card, !vista));
+  }
 
   async function copyMarkdown() {
     await navigator.clipboard.writeText(cardToMarkdown(card, pasos));
@@ -87,15 +98,21 @@ export function CardDetail({
   return (
     <div>
       <button className="btn ghost back" onClick={onBack}>
-        <IconBack size={17} /> Biblioteca
+        <IconBack size={17} /> {backLabel}
       </button>
 
       <header className="detail-header">
         <h1>{card.titulo}</h1>
         <div className="detail-sub">
-          <span className="src">
-            <SourceIcon tipo={card.fuente.tipo} size={14} /> {card.fuente.tipo}
-          </span>
+          {url ? (
+            <a className="src src-link" href={url} target="_blank" rel="noopener noreferrer">
+              <SourceIcon tipo={card.fuente.tipo} size={14} /> {card.fuente.tipo} <IconExternal size={12} />
+            </a>
+          ) : (
+            <span className="src">
+              <SourceIcon tipo={card.fuente.tipo} size={14} /> {card.fuente.tipo}
+            </span>
+          )}
           <Stars value={Math.round((e?.utilidad ?? 0) / 2)} />
           <span aria-hidden="true">·</span>
           <span>
@@ -103,6 +120,12 @@ export function CardDetail({
           </span>
         </div>
         <div className="chip-row">
+          {vista && (
+            <span className="chip vista">
+              <IconEye size={12} /> Vista{' '}
+              {new Date(card.vistoAt!).toLocaleDateString('es', { day: 'numeric', month: 'short' })}
+            </span>
+          )}
           {card.categoria && <span className="chip accent">{card.categoria}</span>}
           <span className="chip">{card.nivel}</span>
           {(card.etiquetas ?? []).map((t) => (
@@ -124,6 +147,14 @@ export function CardDetail({
       />
 
       <div className="toolbar" role="group" aria-label="Acciones de la ficha">
+        <button className={`btn ghost ${vista ? 'on' : ''}`} onClick={toggleVista} aria-pressed={vista}>
+          {vista ? <IconEyeOff size={16} /> : <IconEye size={16} />} {vista ? 'Vista' : 'Marcar vista'}
+        </button>
+        {url && (
+          <a className="btn ghost" href={url} target="_blank" rel="noopener noreferrer">
+            <IconExternal size={16} /> Ver original
+          </a>
+        )}
         <button className="btn ghost" onClick={copyMarkdown}>
           {copied ? <IconCheck size={16} /> : <IconCopy size={16} />} {copied ? 'Copiado' : 'Copiar'}
         </button>

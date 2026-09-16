@@ -180,6 +180,39 @@ export const IconLink = (p: IconProps) => (
   </Icon>
 );
 
+export const IconExternal = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M14 4.5h5.5V10" />
+    <path d="M19.5 4.5 11 13" />
+    <path d="M18 13.5v4a2 2 0 0 1-2 2H6.5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" />
+  </Icon>
+);
+
+export const IconEye = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2.8 12c2-4 5.1-6.2 9.2-6.2s7.2 2.2 9.2 6.2c-2 4-5.1 6.2-9.2 6.2S4.8 16 2.8 12Z" />
+    <circle cx="12" cy="12" r="2.6" />
+  </Icon>
+);
+
+export const IconEyeOff = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 4l16 16" />
+    <path d="M9.9 6.1A9.6 9.6 0 0 1 12 5.8c4.1 0 7.2 2.2 9.2 6.2a12.4 12.4 0 0 1-2.6 3.5" />
+    <path d="M6.2 7.6A11.8 11.8 0 0 0 2.8 12c2 4 5.1 6.2 9.2 6.2 1.5 0 2.9-.3 4.2-.9" />
+    <path d="M10.2 10.2a2.6 2.6 0 0 0 3.6 3.6" />
+  </Icon>
+);
+
+export const IconTopics = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="4" y="4" width="6.5" height="6.5" rx="1.8" />
+    <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.8" />
+    <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.8" />
+    <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.8" />
+  </Icon>
+);
+
 export const IconUpload = (p: IconProps) => (
   <Icon {...p}>
     <path d="M12 19V8M8 11.5 12 7.5l4 4" />

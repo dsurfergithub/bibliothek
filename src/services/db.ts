@@ -31,6 +31,14 @@ export async function saveCard(card: KnowledgeCard): Promise<void> {
   await (await db()).put(STORE, { ...card, updatedAt: Date.now() });
 }
 
+/** Marca o desmarca la ficha como vista. `updatedAt` cambia, así que viaja en el enlace de sincronización. */
+export async function setVisto(card: KnowledgeCard, visto: boolean): Promise<KnowledgeCard> {
+  const next: KnowledgeCard = { ...card, vistoAt: visto ? Date.now() : undefined, updatedAt: Date.now() };
+  if (!visto) delete next.vistoAt;
+  await (await db()).put(STORE, next);
+  return next;
+}
+
 export async function getCard(id: string): Promise<KnowledgeCard | undefined> {
   return (await db()).get(STORE, id);
 }

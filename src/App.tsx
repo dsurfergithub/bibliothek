@@ -19,13 +19,18 @@ import { ImportView } from './ui/ImportView';
 import { CardDetail } from './ui/CardDetail';
 import { Insights } from './ui/Insights';
 import { Settings } from './ui/Settings';
-import { IconAdd, IconChart, IconDice, IconLibrary, IconSettings } from './ui/icons';
+import { Topics } from './ui/Topics';
+import { Deck } from './ui/Deck';
+import { IconAdd, IconChart, IconDice, IconLibrary, IconSettings, IconTopics } from './ui/icons';
 
 type View =
   | { name: 'library' }
   | { name: 'practice' }
   | { name: 'import'; startTab?: 'instagram'; aviso?: string; nonce?: number }
-  | { name: 'card'; id: string }
+  /** `back`: a dónde volver al cerrar la ficha (por defecto, la biblioteca). */
+  | { name: 'card'; id: string; back?: View }
+  | { name: 'topics' }
+  | { name: 'deck'; topicId: string }
   | { name: 'insights' }
   | { name: 'settings' };
 
@@ -148,6 +153,7 @@ export default function App() {
   }
 
   const openCard = cards.find((c) => view.name === 'card' && c.id === view.id);
+  const enTemas = view.name === 'topics' || view.name === 'deck' || (view.name === 'card' && view.back?.name === 'deck');
   // Punto en la pestaña Práctica: hay pasos esperando y hoy no has dado ninguno.
   const pendientesHoy = doneToday(steps) === 0 && steps.some((s) => s.estado === 'pendiente');
 
@@ -159,6 +165,14 @@ export default function App() {
           <span className="brand">Bibliotheke</span>
           <span className="tagline">No guardes contenido. Guarda conocimiento.</span>
         </div>
+        <button
+          className={`header-btn ${view.name === 'settings' ? 'active' : ''}`}
+          onClick={() => setView({ name: 'settings' })}
+          aria-label="Ajustes"
+          aria-current={view.name === 'settings' ? 'page' : undefined}
+        >
+          <IconSettings size={20} />
+        </button>
       </header>
 
       <main className="main">
@@ -194,12 +208,24 @@ export default function App() {
           <CardDetail
             card={openCard}
             steps={steps}
-            onBack={() => setView({ name: 'library' })}
+            backLabel={view.back?.name === 'deck' ? 'Mazo' : 'Biblioteca'}
+            onBack={() => setView(view.back ?? { name: 'library' })}
             onChanged={(updated) => {
               void refresh();
-              if (updated === null) setView({ name: 'library' });
+              if (updated === null) setView(view.back ?? { name: 'library' });
             }}
             onStepsChanged={refreshSteps}
+          />
+        )}
+        {view.name === 'topics' && <Topics cards={cards} onOpen={(topicId) => setView({ name: 'deck', topicId })} />}
+        {view.name === 'deck' && (
+          <Deck
+            key={view.topicId}
+            topicId={view.topicId}
+            cards={cards}
+            onBack={() => setView({ name: 'topics' })}
+            onOpenCard={(id) => setView({ name: 'card', id, back: view })}
+            onChanged={() => void refresh()}
           />
         )}
         {view.name === 'insights' && (
@@ -214,7 +240,7 @@ export default function App() {
       </main>
 
       <nav className="tabbar" aria-label="Secciones">
-        <Tab label="Biblioteca" active={view.name === 'library' || view.name === 'card'} onClick={() => setView({ name: 'library' })}>
+        <Tab label="Biblioteca" active={view.name === 'library' || (view.name === 'card' && !view.back)} onClick={() => setView({ name: 'library' })}>
           <IconLibrary size={21} />
         </Tab>
         <Tab label="Práctica" active={view.name === 'practice'} onClick={() => setView({ name: 'practice' })} badge={pendientesHoy}>
@@ -223,11 +249,11 @@ export default function App() {
         <Tab label="Añadir" active={view.name === 'import'} onClick={() => setView({ name: 'import' })}>
           <IconAdd size={21} />
         </Tab>
+        <Tab label="Temas" active={enTemas} onClick={() => setView({ name: 'topics' })}>
+          <IconTopics size={21} />
+        </Tab>
         <Tab label="Insights" active={view.name === 'insights'} onClick={() => setView({ name: 'insights' })}>
           <IconChart size={21} />
-        </Tab>
-        <Tab label="Ajustes" active={view.name === 'settings'} onClick={() => setView({ name: 'settings' })}>
-          <IconSettings size={21} />
         </Tab>
       </nav>
     </>
