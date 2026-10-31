@@ -84,7 +84,7 @@ export function Practice({
     return (
       <div className="empty-state">
         <h2>Nada que practicar todavía</h2>
-        <p>Cada ficha que añadas trae 5 micropasos. El Dado te irá sirviendo uno cada vez para que apliques lo que guardas.</p>
+        <p>Cada ficha que añadas trae de 1 a 5 micropasos. El Dado te irá sirviendo uno cada vez para que apliques lo que guardas.</p>
       </div>
     );
   }

@@ -1,4 +1,6 @@
-import type { KnowledgeCard, StepRecord } from '../domain/types';
+import type { KnowledgeCard, LinkRecord, StepRecord, Tombstone } from '../domain/types';
+import { listCards, listLinks, listTombstones } from './db';
+import { listSteps } from './steps';
 import { listQueue, type PendingReel } from './queue';
 
 /**
@@ -27,39 +29,55 @@ export function markSyncOut(ts = Date.now()): void {
 }
 
 /**
+ * Todo lo que viaja entre dispositivos salvo la cola: fichas, micropasos,
+ * borrados (para que no resuciten) y caminos entre fichas.
+ */
+export interface Snapshot {
+  cards: KnowledgeCard[];
+  steps: StepRecord[];
+  deleted: Tombstone[];
+  links: LinkRecord[];
+}
+
+export async function loadSnapshot(): Promise<Snapshot> {
+  const [cards, steps, deleted, links] = await Promise.all([listCards(), listSteps(), listTombstones(), listLinks()]);
+  return { cards, steps, deleted, links };
+}
+
+/** Elementos que lleva un snapshot (para avisos y para saber si hay algo que enviar). */
+export function snapshotSize(s: Snapshot): number {
+  return s.cards.length + s.steps.length + s.deleted.length + s.links.length;
+}
+
+/**
  * Lo que ha cambiado desde `desde`. Es la base del enlace incremental: en vez de
  * meter la biblioteca entera cada vez —que es lo que acaba haciendo el enlace
  * demasiado largo— solo viaja lo que el otro dispositivo aún no tiene.
  */
-export function changesSince(
-  cards: KnowledgeCard[],
-  steps: StepRecord[],
-  desde: number
-): { cards: KnowledgeCard[]; steps: StepRecord[] } {
+export function changesSince(s: Snapshot, desde: number): Snapshot {
   return {
-    cards: cards.filter((c) => stamp(c) > desde),
-    steps: steps.filter((s) => (s.updatedAt ?? 0) > desde),
+    cards: s.cards.filter((c) => stamp(c) > desde),
+    steps: s.steps.filter((p) => (p.updatedAt ?? 0) > desde),
+    deleted: s.deleted.filter((t) => t.deletedAt > desde),
+    links: s.links.filter((l) => l.updatedAt > desde),
   };
 }
 
-export interface SyncPayload {
-  cards: KnowledgeCard[];
+/** Lo que trae un enlace o una copia, todavía sin validar (ver `services/transfer.ts`). */
+export interface RawTransfer {
+  cards: unknown[];
+  steps: unknown[];
   queue: PendingReel[];
-  /** Micropasos con su estado: sin ellos, el traspaso perdería lo aplicado. */
-  steps: StepRecord[];
+  deleted: unknown[];
+  links: unknown[];
 }
 
 /**
  * Enlace con la biblioteca. Con `desde > 0` va solo lo cambiado desde esa fecha
  * (ver `changesSince`); la cola de reels viaja siempre entera porque no pesa.
  */
-export async function buildSyncLink(
-  cards: KnowledgeCard[],
-  steps: StepRecord[] = [],
-  desde = 0
-): Promise<string> {
-  const sel = desde > 0 ? changesSince(cards, steps, desde) : { cards, steps };
-  return encodeLink(sel.cards, sel.steps, listQueue());
+export async function buildSyncLink(s: Snapshot, desde = 0): Promise<string> {
+  return encodeLink(desde > 0 ? changesSince(s, desde) : s, listQueue());
 }
 
 /**
@@ -72,39 +90,58 @@ export const MAX_LINK_CHARS = 60_000;
  * Como `buildSyncLink`, pero si no cabe en un enlace parte la biblioteca en
  * varios, cada uno autocontenido (sus fichas + sus pasos) y por debajo del
  * tope. Al abrirlos en el otro dispositivo se funden: el orden da igual. La
- * cola de reels viaja solo en el primero. Antes, una biblioteca grande que
- * nunca se había enviado simplemente no se podía pasar por enlace.
+ * cola, los borrados y los caminos (que pesan poco) viajan solo en el primero.
+ * Antes, una biblioteca grande que nunca se había enviado simplemente no se
+ * podía pasar por enlace.
  */
-export async function buildSyncLinks(
-  cards: KnowledgeCard[],
-  steps: StepRecord[] = [],
-  desde = 0,
-  maxLen = MAX_LINK_CHARS
-): Promise<string[]> {
-  const sel = desde > 0 ? changesSince(cards, steps, desde) : { cards, steps };
+export async function buildSyncLinks(s: Snapshot, desde = 0, maxLen = MAX_LINK_CHARS): Promise<string[]> {
+  const sel = desde > 0 ? changesSince(s, desde) : s;
   const out: string[] = [];
   // Divide por la mitad hasta que cada trozo quepa. Los pasos van con su ficha;
   // los que no tienen ficha en el lote (solo cambió su estado) caen al último.
-  async function emit(cs: KnowledgeCard[], sts: StepRecord[], q: PendingReel[]): Promise<void> {
-    const link = await encodeLink(cs, sts, q);
-    if (link.length <= maxLen || cs.length <= 1) {
+  async function emit(part: Snapshot, q: PendingReel[]): Promise<void> {
+    const link = await encodeLink(part, q);
+    if (link.length <= maxLen || part.cards.length <= 1) {
       out.push(link);
       return;
     }
-    const mid = Math.ceil(cs.length / 2);
-    const a = cs.slice(0, mid);
+    const mid = Math.ceil(part.cards.length / 2);
+    const a = part.cards.slice(0, mid);
     const ids = new Set(a.map((c) => c.id));
-    await emit(a, sts.filter((s) => ids.has(s.cardId)), q);
-    await emit(cs.slice(mid), sts.filter((s) => !ids.has(s.cardId)), []);
+    await emit({ ...part, cards: a, steps: part.steps.filter((p) => ids.has(p.cardId)) }, q);
+    await emit(
+      { cards: part.cards.slice(mid), steps: part.steps.filter((p) => !ids.has(p.cardId)), deleted: [], links: [] },
+      []
+    );
   }
-  await emit(sel.cards, sel.steps, listQueue());
+  await emit(sel, listQueue());
   return out;
 }
 
-async function encodeLink(cards: KnowledgeCard[], steps: StepRecord[], queue: PendingReel[]): Promise<string> {
-  const json = JSON.stringify({ app: 'bibliotheke', version: 2, cards, steps, queue });
+async function encodeLink(s: Snapshot, queue: PendingReel[]): Promise<string> {
+  const json = JSON.stringify({ app: 'bibliotheke', version: 3, ...s, queue });
   const gz = await pipe(new TextEncoder().encode(json), new CompressionStream('gzip'));
   return `${location.origin}${location.pathname}${PREFIX}${toBase64Url(gz)}`;
+}
+
+/**
+ * Saca las listas de un objeto de copia o de enlace. Admite también el formato
+ * más antiguo (un array de fichas a secas). Lo que falte llega vacío.
+ */
+export function rawTransferOf(data: unknown): RawTransfer {
+  if (Array.isArray(data)) return { cards: data, steps: [], queue: [], deleted: [], links: [] };
+  if (typeof data !== 'object' || data === null) throw new Error('formato');
+  const d = data as Record<string, unknown>;
+  const arr = (v: unknown) => (Array.isArray(v) ? v : []);
+  if (!['cards', 'steps', 'queue', 'deleted', 'links'].some((k) => Array.isArray(d[k]))) throw new Error('formato');
+  return {
+    cards: arr(d.cards),
+    // Los enlaces de la versión 1 no traían pasos: se recrean solos al importar.
+    steps: arr(d.steps),
+    queue: arr(d.queue) as PendingReel[],
+    deleted: arr(d.deleted),
+    links: arr(d.links),
+  };
 }
 
 /** Payload pendiente en la URL actual, o null si no venimos de un enlace de sync. */
@@ -112,16 +149,9 @@ export function pendingSyncPayload(): string | null {
   return location.hash.startsWith(PREFIX) ? location.hash.slice(PREFIX.length) : null;
 }
 
-export async function decodeSyncPayload(payload: string): Promise<SyncPayload> {
+export async function decodeSyncPayload(payload: string): Promise<RawTransfer> {
   const bytes = await pipe(fromBase64Url(payload), new DecompressionStream('gzip'));
-  const data = JSON.parse(new TextDecoder().decode(bytes)) as { cards?: unknown; queue?: unknown; steps?: unknown };
-  if (!Array.isArray(data.cards)) throw new Error('El enlace no contiene una biblioteca válida.');
-  return {
-    cards: data.cards as KnowledgeCard[],
-    queue: Array.isArray(data.queue) ? (data.queue as PendingReel[]) : [],
-    // Los enlaces de la versión 1 no traían pasos: se recrean solos al importar.
-    steps: Array.isArray(data.steps) ? (data.steps as StepRecord[]) : [],
-  };
+  return rawTransferOf(JSON.parse(new TextDecoder().decode(bytes)));
 }
 
 /** Quita el #sync=… de la barra de direcciones sin recargar. */

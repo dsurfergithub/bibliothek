@@ -34,7 +34,16 @@ export function cardsOfTopic(cards: KnowledgeCard[], id: string): KnowledgeCard[
  * Menú de temas: una tarjeta por categoría con su progreso de lectura.
  * Tocar una abre el mazo (`Deck`) con las fichas pendientes de ver.
  */
-export function Topics({ cards, onOpen }: { cards: KnowledgeCard[]; onOpen: (id: string) => void }) {
+export function Topics({
+  cards,
+  onOpen,
+  embedded = false,
+}: {
+  cards: KnowledgeCard[];
+  onOpen: (id: string) => void;
+  /** Dentro del Atlas: sin título propio, ya lo pone la pestaña. */
+  embedded?: boolean;
+}) {
   const topics = useMemo(() => topicsOf(cards), [cards]);
   const vistas = cards.filter((c) => c.vistoAt).length;
   const pendientes = cards.length - vistas;
@@ -52,7 +61,7 @@ export function Topics({ cards, onOpen }: { cards: KnowledgeCard[]; onOpen: (id:
     <div>
       <div className="topics-top">
         <div>
-          <h1 className="view-title">Temas</h1>
+          {!embedded && <h1 className="view-title">Temas</h1>}
           <p className="hint topics-lede">
             Pasa las fichas de un tema como si fueran cartas: derecha si ya la has visto, izquierda para dejarla para
             luego.

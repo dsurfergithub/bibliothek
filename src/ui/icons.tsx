@@ -204,6 +204,21 @@ export const IconEyeOff = (p: IconProps) => (
   </Icon>
 );
 
+/** El Atlas: una brújula. */
+export const IconCompass = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="m15.5 8.5-2 5-5 2 2-5Z" />
+  </Icon>
+);
+
+/** Zoom del mapa. */
+export const IconMinus = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M6 12h12" />
+  </Icon>
+);
+
 export const IconTopics = (p: IconProps) => (
   <Icon {...p}>
     <rect x="4" y="4" width="6.5" height="6.5" rx="1.8" />

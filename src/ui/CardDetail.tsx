@@ -4,10 +4,12 @@ import { cardToMarkdown, downloadText, slugify } from '../services/exporters';
 import { deleteCard, saveCard, setVisto } from '../services/db';
 import { recordShare } from '../services/stats';
 import { setStepState, stepsOf } from '../services/steps';
+import { KIND_LABEL, otherEnd, type Graph } from '../services/graph';
 import {
   IconBack,
   IconCheck,
   IconChevron,
+  IconCompass,
   IconCopy,
   IconDownload,
   IconEdit,
@@ -28,6 +30,9 @@ export function CardDetail({
   onBack,
   onChanged,
   onStepsChanged,
+  graph,
+  onOpenCard,
+  onOpenAtlas,
 }: {
   card: KnowledgeCard;
   steps: StepRecord[];
@@ -35,6 +40,10 @@ export function CardDetail({
   onBack: () => void;
   onChanged: (card: KnowledgeCard | null) => void;
   onStepsChanged: () => void;
+  /** Para «Caminos desde aquí»: qué conecta con esta ficha y por qué. */
+  graph: Graph;
+  onOpenCard: (id: string) => void;
+  onOpenAtlas: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -71,7 +80,7 @@ export function CardDetail({
   }
 
   async function remove() {
-    if (!confirm('¿Eliminar esta ficha de tu biblioteca?')) return;
+    if (!confirm('¿Mover esta ficha a la papelera? Podrás restaurarla desde Ajustes.')) return;
     await deleteCard(card.id);
     onChanged(null);
   }
@@ -145,6 +154,8 @@ export function CardDetail({
           onStepsChanged();
         }}
       />
+
+      <Caminos card={card} graph={graph} onOpenCard={onOpenCard} onOpenAtlas={onOpenAtlas} />
 
       <div className="toolbar" role="group" aria-label="Acciones de la ficha">
         <button className={`btn ghost ${vista ? 'on' : ''}`} onClick={toggleVista} aria-pressed={vista}>
@@ -251,8 +262,55 @@ export function CardDetail({
   );
 }
 
+/** Lo que conecta con esta ficha, con el porqué. Lo que haces con ello está en el Atlas. */
+function Caminos({
+  card,
+  graph,
+  onOpenCard,
+  onOpenAtlas,
+}: {
+  card: KnowledgeCard;
+  graph: Graph;
+  onOpenCard: (id: string) => void;
+  onOpenAtlas: (id: string) => void;
+}) {
+  const conns = (graph.byCard.get(card.id) ?? []).slice(0, 4);
+  const total = graph.byCard.get(card.id)?.length ?? 0;
+  return (
+    <section className="section caminos">
+      <div className="caminos-head">
+        <h2>Caminos desde aquí</h2>
+        <button className="btn ghost small" onClick={() => onOpenAtlas(card.id)}>
+          <IconCompass size={15} /> {total > 0 ? 'Ver en el Atlas' : 'Trazar un camino'}
+        </button>
+      </div>
+      {total === 0 ? (
+        <p className="hint">Aún no comparte herramientas, métodos ni conceptos con otra ficha.</p>
+      ) : (
+        <ul className="conn-list">
+          {conns.map((c) => {
+            const other = graph.byId.get(otherEnd(c, card.id));
+            if (!other) return null;
+            const sug = c.kind === 'sugerida';
+            return (
+              <li key={c.id} className={`conn ${sug ? 'sug' : ''}`}>
+                <button className="conn-main" onClick={() => onOpenCard(other.id)}>
+                  <span className="conn-title">{other.titulo}</span>
+                  <span className={`conn-kind ${sug ? 'sug' : ''}`}>{KIND_LABEL[c.kind]}</span>
+                </button>
+                <p className="conn-why">{c.reason}</p>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {total > conns.length && <p className="hint">…y {total - conns.length} más en el Atlas.</p>}
+    </section>
+  );
+}
+
 /**
- * Los 5 micropasos, marcables. Es el bloque que convierte la ficha en algo que
+ * Los micropasos (de 1 a 5), marcables. Es el bloque que convierte la ficha en algo que
  * se hace, no que se lee: por eso va arriba y no enterrado entre las listas.
  */
 function PracticeBlock({

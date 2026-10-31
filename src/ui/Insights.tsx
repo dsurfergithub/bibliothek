@@ -135,7 +135,7 @@ function Aplicado({
       <div className="empty-state">
         <h2>Sin micropasos todavía</h2>
         <p>
-          Tus fichas no traen acciones que registrar. Las que analices a partir de ahora vendrán con cinco micropasos
+          Tus fichas no traen acciones que registrar. Las que analices a partir de ahora vendrán con sus micropasos
           cada una y esta pantalla te dirá cuántos aplicas.
         </p>
       </div>
@@ -274,9 +274,9 @@ function Aplicado({
 
       {stats.zombis.length > 0 && (
         <section className="section">
-          <h2>Fichas zombi</h2>
+          <h2>Fichas sin estrenar</h2>
           <p className="hint">
-            Guardadas hace más de un mes sin un solo paso dado. Aplícalas o bórralas: el ruido también cuesta atención.
+            Guardadas hace más de un mes y sin ningún paso dado. Puedes probar su primer paso, dejarlas como consulta o moverlas a la papelera.
           </p>
           <ul className="card-list">
             {stats.zombis.slice(0, 6).map((card) => (
@@ -346,29 +346,29 @@ function Guardado({ cards }: { cards: KnowledgeCard[] }) {
 
     if (fiab.baja / total > 0.3) {
       obs.push(
-        `El ${pct(fiab.baja / total)}% de lo que guardas es de fiabilidad baja (afirmaciones sin respaldo). Estás acumulando opiniones, no conocimiento: prioriza fuentes que citen evidencia.`
+        `El ${pct(fiab.baja / total)}% de lo que guardas tiene fiabilidad baja (afirmaciones sin fuentes). Cuando puedas, busca contenido que cite evidencia sobre esos temas.`
       );
     }
     if (porVerificar > 0) {
       obs.push(
-        `${porVerificar} ficha${porVerificar > 1 ? 's contienen' : ' contiene'} afirmaciones marcadas como dudosas. No las apliques sin contrastar.`
+        `${porVerificar} ficha${porVerificar > 1 ? 's contienen' : ' contiene'} afirmaciones marcadas como dudosas. Conviene contrastarlas antes de aplicarlas: en cada ficha verás cuáles son.`
       );
     }
     if (sinValor > 0) {
       obs.push(
         sinValor === 1
-          ? 'Una ficha que el análisis marcó como "no merece guardarse" sigue aquí. Bórrala o justifica por qué la conservas.'
-          : `${sinValor} fichas que el análisis marcó como "no merecen guardarse" siguen aquí. Bórralas o justifica por qué las conservas.`
+          ? 'El análisis marcó una ficha como "no merece guardarse". Si tiene sentido para ti, consérvala; si no, puedes moverla a la papelera.'
+          : `El análisis marcó ${sinValor} fichas como "no merecen guardarse". Revísalas: consérvalas si te sirven o muévelas a la papelera.`
       );
     }
     if (porCategoria.length > 0 && porCategoria[0][1] / total > 0.5 && total >= 6) {
       obs.push(
-        `Más de la mitad de tu biblioteca es "${porCategoria[0][0]}". El monocultivo temático refuerza sesgos de confirmación: contrasta con fuentes que discrepen.`
+        `Más de la mitad de tu biblioteca es "${porCategoria[0][0]}". Para tener una visión más completa, puede ayudarte guardar alguna fuente con un punto de vista distinto.`
       );
     }
     if (utilidadMedia < 6 && total >= 5) {
       obs.push(
-        `La utilidad media de tus fichas es ${utilidadMedia.toFixed(1)}/10. Estás guardando contenido flojo: sé más selectivo con lo que analizas.`
+        `La utilidad media de tus fichas es ${utilidadMedia.toFixed(1)}/10. Si quieres subirla, mira la evaluación antes de guardar: el análisis indica si merece la pena.`
       );
     }
     if (obs.length === 0) {

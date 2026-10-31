@@ -26,8 +26,8 @@ REGLAS DE CALIDAD:
 - No inventes nada: si un dato no aparece en el contenido, deja la lista vacía. No rellenes por rellenar.
 - Cada elemento de una lista debe ser autónomo y comprensible sin ver el vídeo.
 - "textoEnPantalla" recoge solo el texto en pantalla que aporte información (no marcas de agua ni el nombre del creador).
-- "acciones": EXACTAMENTE 5 mini-pasos para APLICAR este conocimiento, ordenados del más fácil al más difícil. Cada paso empieza con un verbo en imperativo, es concreto y tan pequeño que se puede ejecutar hoy en menos de 30 minutos.
-- "checklist" es la versión práctica y marcable de esos 5 pasos: reformula cada uno como una casilla verificable con su criterio de "hecho" incluido (p. ej. "He instalado X y he comprobado que Y funciona").
+- "acciones": entre 1 y 5 mini-pasos para APLICAR este conocimiento, tantos como el contenido dé de sí de verdad: una idea sencilla puede necesitar uno o dos; un proceso completo, cinco. No rellenes con pasos genéricos para llegar a un número. Si el contenido es de pura consulta (una referencia, una lista de recursos), basta con un paso para empezar a usarlo. Ordénalos del más fácil al más difícil. Cada paso empieza con un verbo en imperativo, es concreto y tan pequeño que se puede ejecutar hoy en menos de 30 minutos.
+- "checklist" es la versión práctica y marcable de esos mismos pasos, uno por uno y en el mismo orden: reformula cada uno como una casilla verificable con su criterio de "hecho" incluido (p. ej. "He instalado X y he comprobado que Y funciona").
 - "resumenCorto": máximo 2 frases. "resumenDetallado": 1-2 párrafos con la sustancia completa. "ideaPrincipal": 1 frase.
 - "categoria" es una sola área principal (p. ej. "IA", "Productividad", "Inversión", "Programación", "Negocios", "Salud"). "etiquetas": 3-8, en minúsculas, sin "#".
 - "idioma": código ISO del idioma del contenido (p. ej. "es", "en").

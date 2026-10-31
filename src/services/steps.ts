@@ -1,10 +1,10 @@
-import { db, STEP_STORE } from './db';
+import { CARD_STORE, db, STEP_STORE, TRASH_STORE } from './db';
 import type { KnowledgeCard, StepRecord, StepState } from '../domain/types';
 
 /**
  * Registro de micropasos: la capa de PRÁCTICA de Bibliotheke.
  *
- * El análisis ya produce 5 micropasos por ficha, ordenados de fácil a difícil.
+ * El análisis produce de 1 a 5 micropasos por ficha, ordenados de fácil a difícil.
  * Hasta ahora eran texto muerto. Aquí cada uno pasa a ser un registro con
  * estado, así se puede saber qué conocimiento no solo guardaste, sino que
  * aplicaste — y el Dado puede elegir uno por ti con criterio.
@@ -112,23 +112,26 @@ export async function markOffered(step: StepRecord): Promise<void> {
 }
 
 /**
- * Funde pasos de otro dispositivo. Como el `id` es determinista, el mismo paso
- * es el mismo registro en los dos sitios: gana el más reciente y nunca se borra
- * nada. Devuelve cuántos entraron.
+ * Funde pasos de otro dispositivo (ya normalizados, ver `services/transfer.ts`).
+ * Como el `id` es determinista, el mismo paso es el mismo registro en los dos
+ * sitios: gana el más reciente y nunca se borra nada. Los pasos de una ficha
+ * que borraste aquí no entran: volverían a aparecer sin su ficha. Devuelve
+ * cuántos entraron.
  */
-export async function importSteps(steps: unknown): Promise<number> {
-  if (!Array.isArray(steps)) return 0;
+export async function importSteps(steps: StepRecord[]): Promise<number> {
+  if (steps.length === 0) return 0;
   const database = await db();
-  const tx = database.transaction(STEP_STORE, 'readwrite');
+  const tx = database.transaction([STEP_STORE, CARD_STORE, TRASH_STORE], 'readwrite');
+  const store = tx.objectStore(STEP_STORE);
   let n = 0;
-  for (const raw of steps) {
-    const paso = raw as StepRecord;
-    if (!paso || typeof paso.id !== 'string' || typeof paso.cardId !== 'string') continue;
-    const existing = (await tx.store.get(paso.id)) as StepRecord | undefined;
-    if (!existing || (paso.updatedAt ?? 0) >= (existing.updatedAt ?? 0)) {
-      tx.store.put(paso);
-      n++;
-    }
+  for (const paso of steps) {
+    const borrada =
+      !(await tx.objectStore(CARD_STORE).getKey(paso.cardId)) && (await tx.objectStore(TRASH_STORE).getKey(paso.cardId));
+    if (borrada) continue;
+    const existing = (await store.get(paso.id)) as StepRecord | undefined;
+    if (existing && paso.updatedAt <= (existing.updatedAt ?? 0)) continue;
+    store.put(paso);
+    n++;
   }
   await tx.done;
   return n;
@@ -240,10 +243,10 @@ function weigh(
 
 function razonar(f: Factores, card: KnowledgeCard, step: StepRecord, hechos: Map<string, number>): string {
   const dias = Math.round(f.dias);
-  if (dias >= 30) return `Guardada hace ${dias} días y sin estrenar: aplícala o bórrala.`;
+  if (dias >= 30) return `Guardada hace ${dias} días: este paso es una buena forma de retomarla.`;
   if (f.utilidad >= 8) return `De tus fichas mejor valoradas (utilidad ${f.utilidad}/10).`;
-  if (card.categoria && !hechos.get(card.categoria)) return `Todavía no has aplicado nada de "${card.categoria}".`;
+  if (card.categoria && !hechos.get(card.categoria)) return `Sería tu primer paso en "${card.categoria}".`;
   if (step.indice === 0) return 'Es el paso más fácil de la ficha: por aquí se empieza.';
   if (dias >= 7) return `Lleva ${dias} días esperando en tu biblioteca.`;
-  return `Paso ${step.indice + 1} de 5 de esta ficha.`;
+  return `Siguiente paso de esta ficha (el ${step.indice + 1}.º).`;
 }

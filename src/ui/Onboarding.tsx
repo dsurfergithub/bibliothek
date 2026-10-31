@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { setApiKey, validateApiKey } from '../services/apiKey';
+import { entrarSinClave, setApiKey, validateApiKey } from '../services/apiKey';
 
 export function Onboarding({ onDone }: { onDone: () => void }) {
   const [key, setKey] = useState('');
@@ -61,6 +61,20 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           {busy ? 'Validando…' : 'Validar y empezar'}
         </button>
       </form>
+
+      <button
+        className="btn ghost"
+        style={{ width: '100%', marginTop: 10 }}
+        onClick={() => {
+          entrarSinClave();
+          onDone();
+        }}
+      >
+        Entrar sin clave
+      </button>
+      <p className="hint" style={{ textAlign: 'center', marginTop: 6 }}>
+        Para consultar tu biblioteca o restaurar una copia no hace falta. La pedirá al analizar algo nuevo.
+      </p>
     </div>
   );
 }

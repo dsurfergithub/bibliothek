@@ -1,13 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { getApiKey, getModel, MODELS, setApiKey, setModel, validateApiKey } from '../services/apiKey';
-import { clearAll, importCards, listCards } from '../services/db';
+import { clearAll, emptyTrash, listTrash, restoreCard, type TrashEntry } from '../services/db';
 import { downloadText } from '../services/exporters';
-import { buildSyncLinks, changesSince, lastSyncOut, markSyncOut } from '../services/sync';
+import {
+  buildSyncLinks,
+  changesSince,
+  lastSyncOut,
+  loadSnapshot,
+  markSyncOut,
+  rawTransferOf,
+  snapshotSize,
+} from '../services/sync';
 import { copyLink, shareOrCopyLink } from '../services/share';
-import { listQueue, mergeQueue, pruneQueueByCards } from '../services/queue';
-import { importSteps, listSteps } from '../services/steps';
-import type { KnowledgeCard } from '../domain/types';
-import { IconDownload, IconLink, IconShare, IconUpload } from './icons';
+import { listQueue } from '../services/queue';
+import { applyTransfer, describePlan, describeSkipped, planHasChanges, planTransfer } from '../services/transfer';
+import { IconDownload, IconLink, IconShare, IconTrash, IconUpload } from './icons';
+
+/** Los días que se muestran como «hace N días» en la papelera. */
+const DIA = 86_400_000;
 
 export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void }) {
   const [key, setKey] = useState('');
@@ -18,6 +28,9 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
   const importInput = useRef<HTMLInputElement>(null);
   const [ultimoEnvio, setUltimoEnvio] = useState(() => lastSyncOut());
   const [novedades, setNovedades] = useState<{ cards: number; steps: number } | null>(null);
+  const [papelera, setPapelera] = useState<TrashEntry[]>([]);
+  const refreshTrash = () => void listTrash().then(setPapelera);
+  useEffect(refreshTrash, []);
   /** Feedback de los botones de enlace, pintado junto a ellos (no arriba de la página). */
   const [syncMsg, setSyncMsg] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   /**
@@ -26,8 +39,8 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
    * antes, el gesto caducaría y no pasaría nada. Así el toque no espera nada.
    */
   const [prep, setPrep] = useState<{
-    full: { links: string[]; cards: number; steps: number };
-    inc: { links: string[]; cards: number; steps: number } | null;
+    full: { links: string[]; cards: number; total: number };
+    inc: { links: string[]; cards: number; total: number } | null;
     nReels: number;
   } | null>(null);
   /** Partes ya copiadas/enviadas de un envío en varios enlaces (ver `buildSyncLinks`). */
@@ -37,18 +50,18 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
   useEffect(() => {
     let vivo = true;
     (async () => {
-      const [cards, steps] = await Promise.all([listCards(), listSteps()]);
-      const d = ultimoEnvio > 0 ? changesSince(cards, steps, ultimoEnvio) : null;
+      const snap = await loadSnapshot();
+      const d = ultimoEnvio > 0 ? changesSince(snap, ultimoEnvio) : null;
       const [full, inc] = await Promise.all([
-        buildSyncLinks(cards, steps, 0),
-        d ? buildSyncLinks(cards, steps, ultimoEnvio) : Promise.resolve(null),
+        buildSyncLinks(snap, 0),
+        d ? buildSyncLinks(snap, ultimoEnvio) : Promise.resolve(null),
       ]);
       if (!vivo) return;
       setNovedades(d ? { cards: d.cards.length, steps: d.steps.length } : null);
       setParteState({ inc: true, i: 0 });
       setPrep({
-        full: { links: full, cards: cards.length, steps: steps.length },
-        inc: d && inc ? { links: inc, cards: d.cards.length, steps: d.steps.length } : null,
+        full: { links: full, cards: snap.cards.length, total: snapshotSize(snap) },
+        inc: d && inc ? { links: inc, cards: d.cards.length, total: snapshotSize(d) } : null,
         nReels: listQueue().length,
       });
     })().catch(() => {
@@ -57,7 +70,7 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
     return () => {
       vivo = false;
     };
-  }, [ultimoEnvio]);
+  }, [ultimoEnvio, papelera.length]);
 
   const current = getApiKey();
   const masked = current ? `${current.slice(0, 6)}…${current.slice(-4)}` : '—';
@@ -77,38 +90,65 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
     }
   }
 
-  /** Descarga una copia de seguridad completa: fichas + cola de reels pendientes. */
+  /** Descarga una copia de seguridad completa: fichas, pasos, caminos, borrados y cola de reels. */
   async function exportLibrary() {
-    const cards = await listCards();
-    const steps = await listSteps();
+    const snap = await loadSnapshot();
     const queue = listQueue();
     downloadText(
       `bibliotheke-backup-${new Date().toISOString().slice(0, 10)}.json`,
-      JSON.stringify({ app: 'bibliotheke', version: 2, cards, steps, queue }, null, 2),
+      JSON.stringify({ app: 'bibliotheke', version: 3, ...snap, queue }, null, 2),
       'application/json'
     );
     setMsg({ kind: 'ok', text: 'Copia de seguridad descargada. Guárdala en un sitio seguro.' });
   }
 
-  /** Carga una copia (o la exportación del PC): funde sin borrar nada de lo que ya haya. */
+  /**
+   * Carga una copia (o la exportación del PC): primero valida y enseña qué
+   * cambiaría; solo si confirmas, lo funde sin borrar nada de lo que ya haya.
+   */
   async function importLibrary(file: File) {
+    setMsg(null);
+    let plan;
     try {
-      const data = JSON.parse(await file.text());
-      const cards: KnowledgeCard[] = Array.isArray(data) ? data : data.cards;
-      if (!Array.isArray(cards)) throw new Error('formato');
-      const n = await importCards(cards);
-      const p = await importSteps(data?.steps);
-      const q = data && Array.isArray(data.queue) ? mergeQueue(data.queue) : 0;
-      const limpiados = pruneQueueByCards(cards);
-      onLibraryChanged();
-      const partes = [`${n} ficha${n === 1 ? '' : 's'}`];
-      if (p) partes.push(`${p} micropaso${p === 1 ? '' : 's'}`);
-      if (q) partes.push(`${q} reel${q === 1 ? '' : 's'} en cola`);
-      if (limpiados) partes.push(`${limpiados} reel${limpiados === 1 ? '' : 's'} ya procesado${limpiados === 1 ? '' : 's'} fuera de la cola`);
-      setMsg({ kind: 'ok', text: `Copia cargada: ${partes.join(' y ')}. Nada de lo que ya tenías se ha borrado.` });
+      plan = await planTransfer(rawTransferOf(JSON.parse(await file.text())));
     } catch {
       setMsg({ kind: 'error', text: 'El archivo no es una copia válida de Bibliotheke.' });
+      return;
     }
+    const omitidas = describeSkipped(plan);
+    if (!planHasChanges(plan)) {
+      setMsg({ kind: 'ok', text: ['Esa copia no trae nada nuevo: ya tienes todo lo que contiene.', ...omitidas].join(' ') });
+      return;
+    }
+    const ok = confirm(
+      [
+        'Esta copia trae:',
+        ...describePlan(plan).map((c) => `• ${c}`),
+        ...(omitidas.length ? ['', ...omitidas] : []),
+        '',
+        '¿Cargarla? Lo demás se conserva.',
+      ].join('\n')
+    );
+    if (!ok) return;
+    const { limpiados } = await applyTransfer(plan);
+    onLibraryChanged();
+    refreshTrash();
+    const partes = describePlan(plan);
+    if (limpiados) partes.push(`${limpiados} reel${limpiados === 1 ? '' : 's'} ya procesado${limpiados === 1 ? '' : 's'} fuera de la cola`);
+    setMsg({ kind: 'ok', text: `Copia cargada: ${partes.join(', ')}. Nada de lo que ya tenías se ha perdido.` });
+  }
+
+  async function restore(id: string) {
+    const card = await restoreCard(id);
+    refreshTrash();
+    onLibraryChanged();
+    if (card) setMsg({ kind: 'ok', text: `«${card.titulo}» ha vuelto a tu biblioteca.` });
+  }
+
+  async function vaciarPapelera() {
+    if (!confirm('Las fichas de la papelera se borrarán para siempre de este dispositivo. ¿Continuar?')) return;
+    await emptyTrash();
+    refreshTrash();
   }
 
   /**
@@ -127,7 +167,7 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
     const desde = incremental ? ultimoEnvio : 0;
     const sel = desde > 0 && prep.inc ? prep.inc : prep.full;
 
-    if (sel.cards === 0 && sel.steps === 0 && prep.nReels === 0) {
+    if (sel.total === 0 && prep.nReels === 0) {
       setSyncMsg({
         kind: 'error',
         text:
@@ -187,6 +227,7 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
     if (!confirm('Esto borrará TODAS las fichas de este dispositivo. ¿Continuar?')) return;
     await clearAll();
     onLibraryChanged();
+    refreshTrash();
     setMsg({ kind: 'ok', text: 'Biblioteca vaciada.' });
   }
 
@@ -318,9 +359,9 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
         <p className="hint">
           Tu biblioteca vive solo en este dispositivo (IndexedDB). Descarga de vez en cuando una copia
           en archivo <code>.json</code> — sobre todo en el móvil, donde el navegador puede vaciar el
-          almacenamiento si pasas días sin abrir la app. La copia incluye <strong>fichas + cola de
-          reels</strong>. Para restaurarla (o cargar la copia del PC), pulsa «Cargar copia»: se funde
-          sin borrar lo que ya tengas.
+          almacenamiento si pasas días sin abrir la app. La copia incluye <strong>fichas, micropasos, caminos,
+          borrados y cola de reels</strong>. Para restaurarla (o cargar la copia del PC), pulsa «Cargar
+          copia»: verás qué trae antes de confirmar, y se funde sin borrar lo que ya tengas.
         </p>
         <div className="settings-row" style={{ marginTop: 10 }}>
           <button className="btn" onClick={exportLibrary}>
@@ -347,6 +388,38 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
       </div>
 
       <div className="settings-section card">
+        <h2>Papelera</h2>
+        {papelera.length === 0 ? (
+          <p className="hint" style={{ margin: 0 }}>
+            Vacía. Las fichas que elimines quedan aquí hasta que las restaures o vacíes la papelera.
+          </p>
+        ) : (
+          <>
+            <p className="hint">
+              Al eliminar una ficha, el borrado también viaja en el enlace y en la copia: así no reaparece al cargar
+              una copia antigua. Si la restauras, vuelve en los dos dispositivos.
+            </p>
+            <ul className="trash-list">
+              {papelera.map((t) => (
+                <li key={t.id}>
+                  <span className="trash-title">{t.card?.titulo}</span>
+                  <span className="trash-when">{haceDias(t.deletedAt)}</span>
+                  <button className="btn" onClick={() => restore(t.id)}>
+                    Restaurar
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="settings-row" style={{ marginTop: 10 }}>
+              <button className="btn danger" onClick={vaciarPapelera}>
+                <IconTrash size={16} /> Vaciar papelera
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="settings-section card">
         <h2>Acerca de</h2>
         <p className="hint" style={{ margin: 0 }}>
           <strong>Bibliotheke</strong> · «No guardes contenido. Guarda conocimiento.» Convierte
@@ -356,4 +429,9 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
       </div>
     </div>
   );
+}
+
+function haceDias(ts: number): string {
+  const d = Math.floor((Date.now() - ts) / DIA);
+  return d <= 0 ? 'hoy' : d === 1 ? 'ayer' : `hace ${d} días`;
 }

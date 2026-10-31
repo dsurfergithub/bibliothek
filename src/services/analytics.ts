@@ -12,11 +12,15 @@ const DIA = 86_400_000;
 /** A partir de aquí, una ficha guardada y sin un solo paso dado es una ficha zombi. */
 const DIAS_ZOMBI = 30;
 
-/** Inicio del día local de una marca de tiempo (las rachas se cuentan por días, no por 24h). */
-function dia(ts: number): number {
+/**
+ * Número de día de calendario LOCAL de una marca de tiempo: dos días seguidos
+ * dan dos números seguidos. Antes se restaban medianoches y se exigía que
+ * distasen 24 h, pero el día del cambio de hora dura 23 o 25: la racha se
+ * cortaba ahí y tres días seguidos podían contar como uno.
+ */
+export function dia(ts: number): number {
   const d = new Date(ts);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
+  return Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DIA);
 }
 
 export interface CategoriaAplicada {
@@ -77,17 +81,17 @@ export function appliedStats(cards: KnowledgeCard[], steps: StepRecord[], now = 
   /* --- racha: días naturales seguidos con al menos un paso --- */
   const diasConPaso = [...new Set(hechosList.map((s) => dia(s.doneAt ?? 0)))].sort((a, b) => b - a);
   let racha = 0;
-  if (diasConPaso.length > 0 && (diasConPaso[0] === hoyIni || diasConPaso[0] === hoyIni - DIA)) {
+  if (diasConPaso.length > 0 && (diasConPaso[0] === hoyIni || diasConPaso[0] === hoyIni - 1)) {
     racha = 1;
     for (let i = 1; i < diasConPaso.length; i++) {
-      if (diasConPaso[i - 1] - diasConPaso[i] !== DIA) break;
+      if (diasConPaso[i - 1] - diasConPaso[i] !== 1) break;
       racha++;
     }
   }
   let mejorRacha = 0;
   let corrida = 0;
   for (let i = 0; i < diasConPaso.length; i++) {
-    corrida = i > 0 && diasConPaso[i - 1] - diasConPaso[i] === DIA ? corrida + 1 : 1;
+    corrida = i > 0 && diasConPaso[i - 1] - diasConPaso[i] === 1 ? corrida + 1 : 1;
     mejorRacha = Math.max(mejorRacha, corrida);
   }
 
@@ -180,9 +184,10 @@ export function appliedStats(cards: KnowledgeCard[], steps: StepRecord[], now = 
 }
 
 /**
- * Lectura crítica de lo APLICADO. Reglas locales, sin IA, y deliberadamente
- * incómodas: el objetivo es que la app te diga lo que una biblioteca bonita
- * nunca te dice.
+ * Lectura crítica de lo APLICADO. Reglas locales, sin IA. Señala lo que una
+ * biblioteca bonita no te dice, pero sin juzgar: la app no conoce tu contexto
+ * (quizá guardas algo para más adelante, o era solo de consulta), así que cada
+ * observación propone un siguiente paso concreto en vez de atribuir culpas.
  */
 export function appliedCritique(stats: AppliedStats): string[] {
   const obs: string[] = [];
@@ -192,7 +197,7 @@ export function appliedCritique(stats: AppliedStats): string[] {
 
   if (stats.hechos === 0) {
     obs.push(
-      `Has generado ${stats.totalPasos} micropasos y no has dado ninguno. Toda tu biblioteca es, por ahora, entretenimiento bien archivado: tira el Dado y haz uno.`
+      `Tienes ${stats.totalPasos} micropasos esperando y aún no has marcado ninguno. Un buen comienzo: tira el Dado con «solo fáciles» y elige uno de cinco minutos.`
     );
     return obs;
   }
@@ -204,51 +209,51 @@ export function appliedCritique(stats: AppliedStats): string[] {
     .sort((a, b) => b.gap - a.gap)[0];
   if (hueco && hueco.gap > 0.15) {
     obs.push(
-      `"${hueco.c.categoria}" es el ${pct(hueco.c.cuotaGuardada)}% de tu biblioteca pero solo el ${pct(hueco.c.cuotaAplicada)}% de lo que aplicas (tasa ${pct(hueco.c.tasa)}%). Ahí consumes contenido, no lo usas: o lo aplicas o deja de guardarlo.`
+      `"${hueco.c.categoria}" es el ${pct(hueco.c.cuotaGuardada)}% de tu biblioteca y el ${pct(hueco.c.cuotaAplicada)}% de lo que aplicas. Tienes ahí varias fichas pendientes: filtra el Dado por ese tema y prueba con su paso más sencillo.`
     );
   }
 
   const mejor = [...grandes].sort((a, b) => b.tasa - a.tasa)[0];
   if (mejor && mejor.tasa >= 0.4 && mejor.categoria !== hueco?.c.categoria) {
     obs.push(
-      `Donde sí conviertes es "${mejor.categoria}": aplicas el ${pct(mejor.tasa)}% de sus pasos. Cuando dudes de qué guardar, guarda más de esto.`
+      `En "${mejor.categoria}" aplicas el ${pct(mejor.tasa)}% de los pasos. Es el tipo de contenido que mejor te funciona: tenlo en cuenta al decidir qué guardar.`
     );
   }
 
   if (stats.tasa < 0.2 && stats.totalPasos >= 20) {
     obs.push(
-      `Aplicas el ${pct(stats.tasa)}% de los micropasos que generas. La app no tiene un problema de análisis, lo tienes de ejecución: baja el listón y usa el filtro de pasos fáciles.`
+      `Has aplicado el ${pct(stats.tasa)}% de tus micropasos. Si muchos te parecen grandes, el filtro de pasos fáciles te sirve los dos primeros de cada ficha, que son los más cortos.`
     );
   }
 
   if (stats.zombis.length > 0) {
-    const n = stats.zombis.length;
+    const k = stats.zombis.length;
     obs.push(
-      `${n} ficha${n > 1 ? 's llevan' : ' lleva'} más de un mes guardada${n > 1 ? 's' : ''} sin un solo paso dado. La más vieja: "${stats.zombis[0].titulo}". Aplícalas o bórralas, no hay tercera opción honesta.`
+      `${k} ficha${k > 1 ? 's llevan' : ' lleva'} más de un mes sin estrenar; la más antigua es "${stats.zombis[0].titulo}". Puedes darle un primer paso, guardarla como consulta o moverla a la papelera.`
     );
   }
 
   if (stats.latenciaMediaDias !== null && stats.latenciaMediaDias > 7) {
     obs.push(
-      `Tardas ${Math.round(stats.latenciaMediaDias)} días de media desde que guardas una ficha hasta que das su primer paso. Cuanto más tarde, menos contexto conservas: intenta dar un paso el mismo día.`
+      `Sueles dar el primer paso unos ${Math.round(stats.latenciaMediaDias)} días después de guardar una ficha. Probar uno el mismo día ayuda a conservar el contexto.`
     );
   }
 
   if (stats.descartados >= 5 && stats.descartados > stats.hechos) {
     obs.push(
-      `Has marcado ${stats.descartados} pasos como "no aplica", más de los que has hecho. O el contenido que analizas no encaja con tu vida real, o estás usando ese botón para huir.`
+      `Has marcado ${stats.descartados} pasos como "no aplica", más de los que has hecho. Puede que parte de lo que analizas no encaje con tu día a día: revisa qué temas acumulan más descartes.`
     );
   }
 
   if (stats.racha >= 3) {
-    obs.push(`Llevas ${stats.racha} días seguidos aplicando algo. Es la métrica que más se parece a aprender de verdad.`);
+    obs.push(`Llevas ${stats.racha} días seguidos aplicando algo. Esa constancia es lo que más se parece a aprender de verdad.`);
   } else if (stats.mejorRacha >= 3 && stats.racha === 0) {
-    obs.push(`Tu mejor racha fueron ${stats.mejorRacha} días seguidos y ahora estás a cero. Un paso fácil hoy la reabre.`);
+    obs.push(`Tu mejor racha fueron ${stats.mejorRacha} días seguidos. Un paso fácil hoy empieza una nueva.`);
   }
 
   if (obs.length === 0) {
     obs.push(
-      `Has aplicado ${stats.hechos} de ${stats.totalPasos} micropasos (${pct(stats.tasa)}%) repartidos por tu biblioteca. Ritmo sano: sigue tirando el Dado.`
+      `Has aplicado ${stats.hechos} de ${stats.totalPasos} micropasos (${pct(stats.tasa)}%) repartidos por tu biblioteca. Buen ritmo.`
     );
   }
   return obs.slice(0, 5);

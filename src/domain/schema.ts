@@ -32,8 +32,9 @@ export const cardAnalysisSchema: Schema = {
     ideaPrincipal: str,
     aprendizajes: strArr,
     consejos: strArr,
-    acciones: strArr,
-    checklist: strArr,
+    // De 1 a 5: cuántos depende del contenido (ver el prompt).
+    acciones: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: '1', maxItems: '5' },
+    checklist: { type: Type.ARRAY, items: { type: Type.STRING }, maxItems: '5' },
     herramientas: strArr,
     apps: strArr,
     webs: strArr,

@@ -6,6 +6,8 @@
  */
 const KEY = 'bibliotheke.apiKey';
 const MODEL_KEY = 'bibliotheke.model';
+/** Elegiste entrar sin clave: puedes consultar y restaurar copias, pero no analizar. */
+const SIN_CLAVE_KEY = 'bibliotheke.sinClave';
 
 export const DEFAULT_MODEL = 'gemini-2.5-flash';
 export const MODELS = [
@@ -20,6 +22,14 @@ export function getApiKey(): string | null {
 
 export function setApiKey(key: string): void {
   localStorage.setItem(KEY, key.trim());
+}
+
+export function sinClave(): boolean {
+  return localStorage.getItem(SIN_CLAVE_KEY) === '1';
+}
+
+export function entrarSinClave(): void {
+  localStorage.setItem(SIN_CLAVE_KEY, '1');
 }
 
 export function clearApiKey(): void {

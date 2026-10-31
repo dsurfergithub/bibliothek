@@ -110,7 +110,7 @@ export interface StepRecord {
   /** `${cardId}#${indice}`. */
   id: string;
   cardId: string;
-  /** Posición en `acciones` (0-4). Como el análisis los ordena de fácil a difícil, el índice ES la dificultad. */
+  /** Posición en `acciones` (0 a 4 como mucho). Como el análisis los ordena de fácil a difícil, el índice ES la dificultad. */
   indice: number;
   /** El micropaso, copiado de la ficha. */
   texto: string;
@@ -150,3 +150,39 @@ export const LIST_SECTIONS: ReadonlyArray<{ key: keyof CardAnalysis; label: stri
   { key: 'fuentesDetectadas', label: 'Fuentes detectadas' },
   { key: 'textoEnPantalla', label: 'Texto en pantalla' },
 ];
+
+/**
+ * Rastro de una ficha borrada. Viaja en el enlace y en la copia de seguridad
+ * para que el otro dispositivo también la borre, y para que una copia antigua
+ * no la resucite: una ficha solo vuelve si es MÁS reciente que su borrado
+ * (p. ej. porque la restauraste de la papelera).
+ */
+export interface Tombstone {
+  id: string;
+  deletedAt: number;
+}
+
+/**
+ * Relación entre dos fichas decidida por ti. Las conexiones automáticas
+ * (herramienta, método o concepto compartido) se calculan al vuelo y no se
+ * guardan; aquí solo queda lo que no se puede deducir:
+ *
+ * - `manual`: la trazaste tú, con tu explicación en `nota`.
+ * - `confirmada`: aceptaste una sugerencia.
+ * - `descartada`: la rechazaste; el Atlas no vuelve a proponerla.
+ *
+ * El `id` es determinista (los dos ids de ficha, ordenados) para que el mismo
+ * camino sea el mismo registro en el móvil y en el PC.
+ */
+export type LinkEstado = 'manual' | 'confirmada' | 'descartada';
+
+export interface LinkRecord {
+  id: string;
+  a: string;
+  b: string;
+  estado: LinkEstado;
+  nota: string;
+  updatedAt: number;
+}
+
+export const linkId = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);

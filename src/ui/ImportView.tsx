@@ -3,22 +3,67 @@ import { analyze, humanizeError, STAGE_LABELS, type AnalysisInput, type Stage } 
 import { getApiKey, getModel } from '../services/apiKey';
 import { companionOnline } from '../services/companion';
 import { listCards, saveCard } from '../services/db';
-import { buildSyncLink } from '../services/sync';
+import { buildSyncLink, loadSnapshot } from '../services/sync';
 import { shareOrCopyLink } from '../services/share';
-import { listSteps } from '../services/steps';
 import {
   buildQueueLink,
   dequeue,
   enqueueMany,
   extractAllInstagramUrls,
   listQueue,
+  pruneQueueByCards,
   shortcodeOf,
   type PendingReel,
 } from '../services/queue';
+import { fold } from '../domain/text';
 import { IconAdd, IconBolt, IconCheck, IconClose, IconFilm, IconShare, SourceIcon } from './icons';
 import type { KnowledgeCard } from '../domain/types';
 
 type Mode = 'video' | 'youtube' | 'instagram' | 'texto';
+
+/**
+ * Identidad de una fuente para detectar que ya la analizaste: el id del vídeo
+ * de YouTube, el shortcode del reel, el nombre del archivo o el comienzo del
+ * texto. Así dos URLs distintas del mismo vídeo cuentan como la misma fuente.
+ */
+function sourceKey(tipo: string, referencia: string): string | null {
+  const ref = referencia.trim();
+  if (!ref) return null;
+  if (tipo === 'youtube') {
+    const m = /(?:v=|youtu\.be\/|shorts\/|embed\/)([\w-]{11})/.exec(ref);
+    return m ? `yt:${m[1]}` : `yt:${ref}`;
+  }
+  if (tipo === 'instagram') return `ig:${shortcodeOf(ref) ?? ref}`;
+  if (tipo === 'video') return `file:${ref.toLowerCase()}`;
+  return `txt:${fold(ref).replace(/\s+/g, ' ').slice(0, 60)}`;
+}
+
+function inputKey(input: AnalysisInput): string | null {
+  switch (input.kind) {
+    case 'youtube':
+      return sourceKey('youtube', input.url);
+    case 'instagram':
+      return sourceKey('instagram', input.url);
+    case 'video':
+      return sourceKey('video', input.file.name);
+    case 'texto':
+      return sourceKey('texto', input.text.slice(0, 80));
+  }
+}
+
+/**
+ * Antes de gastar un análisis: si ya hay una ficha de esta misma fuente, avisa
+ * y deja elegir. Devuelve true si hay que seguir.
+ */
+async function confirmNotDuplicate(input: AnalysisInput): Promise<boolean> {
+  const key = inputKey(input);
+  if (!key) return true;
+  const previa = (await listCards()).find((c) => sourceKey(c.fuente.tipo, c.fuente.referencia) === key);
+  if (!previa) return true;
+  return confirm(`Ya tienes una ficha de esta fuente: «${previa.titulo}». ¿Analizarla otra vez y crear otra ficha?`);
+}
+
+const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
 
 const STAGE_ORDER: Stage[] = ['preparando', 'descargando', 'subiendo', 'procesando', 'analizando', 'guardando'];
 
@@ -33,8 +78,11 @@ export function ImportView({
   initialNotice,
   onSaved,
   onBatchDone,
+  onGoSettings,
 }: {
   startTab?: 'instagram';
+  /** Sin API key no se puede analizar: el aviso lleva a Ajustes. */
+  onGoSettings: () => void;
   /** Aviso con el que se entra (p. ej. los reels que acaba de traer un enlace). */
   initialNotice?: string;
   onSaved: (card: KnowledgeCard) => void;
@@ -100,11 +148,14 @@ export function ImportView({
   const igUrls = extractAllInstagramUrls(igUrl);
   const igValid = igUrls.length > 0;
 
+  const hasKey = getApiKey() !== null;
+
   async function run() {
     if (!input) return;
     const apiKey = getApiKey();
     if (!apiKey) return;
     setError(null);
+    if (!(await confirmNotDuplicate(input))) return;
     try {
       const card = await analyze(apiKey, getModel(), input, setStage);
       await saveCard(card);
@@ -123,6 +174,7 @@ export function ImportView({
     if (!apiKey) return;
     setError(null);
     setNotice(null);
+    if (!(await confirmNotDuplicate({ kind: 'instagram', url: igUrls[0] }))) return;
     try {
       const card = await analyze(apiKey, getModel(), { kind: 'instagram', url: igUrls[0] }, setStage);
       await saveCard(card);
@@ -134,6 +186,18 @@ export function ImportView({
       setError(humanizeError(err));
     } finally {
       setStage(null);
+    }
+  }
+
+  /** Pega lo copiado (en iPhone, el enlace que copias desde Instagram con «Copiar enlace»). */
+  async function pegar() {
+    setError(null);
+    try {
+      const t = (await navigator.clipboard.readText()).trim();
+      if (!t) return;
+      setIgUrl((prev) => (prev.trim() ? `${prev.trim()}\n${t}` : t));
+    } catch {
+      setError('No se pudo leer el portapapeles. Mantén pulsado el campo y elige «Pegar».');
     }
   }
 
@@ -185,8 +249,14 @@ export function ImportView({
   async function processQueue() {
     const apiKey = getApiKey();
     if (!apiKey) return;
+    // Los reels que ya son ficha no se vuelven a analizar.
+    const yaFichas = pruneQueueByCards(await listCards());
     const items = listQueue();
-    if (items.length === 0) return;
+    if (items.length === 0) {
+      refreshQueue();
+      if (yaFichas) setNotice(`Los ${yaFichas} reels de la cola ya eran fichas: los he quitado.`);
+      return;
+    }
     setError(null);
     setNotice(null);
     setBatchResult(null);
@@ -212,7 +282,7 @@ export function ImportView({
     setBatchResult({ ok, errors });
     if (ok > 0) {
       try {
-        setReturnLink(await buildSyncLink(await listCards(), await listSteps(), inicio));
+        setReturnLink(await buildSyncLink(await loadSnapshot(), inicio));
       } catch {
         setReturnLink(null);
       }
@@ -298,6 +368,17 @@ export function ImportView({
   return (
     <div>
       <h1 className="view-title">Añadir conocimiento</h1>
+
+      {!hasKey && (
+        <div className="info-box" style={{ marginBottom: 14 }}>
+          Para analizar contenido nuevo hace falta tu API key de Gemini. Puedes guardar reels en la cola sin ella.
+          <div style={{ marginTop: 8 }}>
+            <button className="btn small" onClick={onGoSettings}>
+              Añadir la clave en Ajustes
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="segmented" role="tablist" aria-label="Tipo de fuente">
         {(
@@ -394,6 +475,18 @@ export function ImportView({
             {igUrls.length > 1 && (
               <p className="hint" style={{ marginTop: 6 }}>{igUrls.length} reels detectados.</p>
             )}
+            {'clipboard' in navigator && 'readText' in navigator.clipboard && (
+              <button className="btn small" style={{ marginTop: 8 }} onClick={pegar}>
+                Pegar enlace copiado
+              </button>
+            )}
+            {isIOS && (
+              <p className="hint" style={{ marginTop: 8 }}>
+                En iPhone, el menú Compartir de Instagram no puede enviar directamente a esta app. En el reel, toca
+                Compartir → <strong>Copiar enlace</strong> y luego «Pegar enlace copiado». Para hacerlo en un toque,
+                puedes crear un Atajo de iOS (ver la guía en GitHub).
+              </p>
+            )}
           </div>
 
           {companion === true && (
@@ -402,7 +495,7 @@ export function ImportView({
 Compañero detectado en este equipo: puedes analizar el reel ahora mismo.
               </p>
               <div className="settings-row">
-                <button className="btn primary" disabled={!igValid} onClick={analyzeNow}>
+                <button className="btn primary" disabled={!igValid || !hasKey} onClick={analyzeNow}>
                   <IconAdd size={17} /> Analizar ahora
                 </button>
                 <button className="btn" disabled={!igValid} onClick={addToQueue}>
@@ -510,7 +603,7 @@ Compañero detectado en este equipo: puedes analizar el reel ahora mismo.
                 ))}
               </ul>
               {companion === true ? (
-                <button className="btn primary" style={{ marginTop: 12 }} onClick={processQueue}>
+                <button className="btn primary" style={{ marginTop: 12 }} onClick={processQueue} disabled={!hasKey}>
                   <IconBolt size={17} /> Procesar {queue.length} reel(s) en este PC
                 </button>
               ) : (
@@ -558,7 +651,7 @@ Compañero detectado en este equipo: puedes analizar el reel ahora mismo.
       {mode !== 'instagram' && error && <div className="error-box">{error}</div>}
 
       {mode !== 'instagram' && (
-        <button className="btn primary" style={{ width: '100%', marginTop: 8 }} disabled={!input} onClick={run}>
+        <button className="btn primary" style={{ width: '100%', marginTop: 8 }} disabled={!input || !hasKey} onClick={run}>
           <IconAdd size={18} /> Extraer conocimiento
         </button>
       )}
