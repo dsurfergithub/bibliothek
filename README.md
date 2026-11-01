@@ -74,12 +74,14 @@ A partir del segundo envío el enlace lleva **solo lo que ha cambiado desde el a
 
 ### En iPhone
 
-Safari en iOS todavía no permite que una web instalada aparezca en el menú Compartir de Instagram, así que el `share_target` del manifest solo funciona en Android. En el iPhone:
+Safari en iOS todavía no permite que una web instalada aparezca en el menú Compartir de Instagram, así que el `share_target` del manifest solo funciona en Android. En el iPhone, el camino rápido es el portapapeles:
 
 1. En el reel, toca Compartir → **Copiar enlace**.
-2. En Bibliotheke, **Añadir → Instagram → «Pegar enlace copiado»** y «Guardar en la cola».
+2. Abre Bibliotheke: arriba aparece **«Pegar reel»** (destacado justo al volver a la app). Un toque —más el globo «Pegar» que iOS muestra por privacidad— y el reel queda en la cola. Si lo copiado es un vídeo de YouTube, se abre Añadir con la URL ya puesta.
 
-Para hacerlo en un toque, crea un **Atajo de iOS** que reciba URLs desde la hoja de compartir y abra `https://<tu-dominio>/?share_url=` seguido de la URL (con la acción «Codificar URL»). La app recoge el reel y lo deja en la cola. Ojo: el Atajo abre Safari, y en iOS la app añadida a la pantalla de inicio guarda sus datos aparte de Safari; si usas la app instalada, el atajo más fiable es «Copiar al portapapeles» seguido de abrir la app y pulsar «Pegar enlace copiado».
+La app no puede saber por sí sola si hay un enlace copiado: iOS no deja a una web leer el portapapeles sin que la toques. Por eso es un botón y no un aviso automático.
+
+Un **Atajo de iOS** en la hoja de compartir que abra `https://<tu-dominio>/?share_url=` + la URL codificada también funciona, pero abre Safari, y en iOS la app de la pantalla de inicio guarda sus datos aparte de Safari: el reel acabaría en la cola de Safari, no en la de la app.
 
 Antes de analizar, la app avisa si ya tienes una ficha de esa misma fuente, y al procesar la cola se salta los reels que ya son ficha.
 

@@ -1,9 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Bibliotheke: un libro abierto bajo una constelación. El libro es lo que
+       guardas; las estrellas unidas, lo que el Atlas conecta entre fichas. -->
   <rect width="128" height="128" rx="28" fill="#14110f"/>
-  <g fill="none" stroke="#d4a95a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M64 38c-8-7-20-9-30-6v58c10-3 22-1 30 6 8-7 20-9 30-6V32c-10-3-22-1-30 6z"/>
-    <path d="M64 38v58"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M38 36 64 49 91 30" stroke="#a89c8e" stroke-width="3.2"/>
+    <path d="M22 96c14-7 28-7 42 3 14-10 28-10 42-3V60c-14-7-28-7-42 3-14-10-28-10-42-3z" stroke="#d4a95a" stroke-width="6"/>
+    <path d="M64 63v36" stroke="#d4a95a" stroke-width="6"/>
   </g>
-  <circle cx="94" cy="34" r="14" fill="#d4a95a"/>
-  <path d="M88 34l4 4 8-8" stroke="#14110f" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="38" cy="36" r="6" fill="#ece5db"/>
+  <circle cx="91" cy="30" r="6" fill="#ece5db"/>
+  <circle cx="64" cy="49" r="8.5" fill="#e8bf6e"/>
 </svg>

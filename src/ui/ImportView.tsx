@@ -79,8 +79,11 @@ export function ImportView({
   onSaved,
   onBatchDone,
   onGoSettings,
+  initialUrl,
 }: {
-  startTab?: 'instagram';
+  startTab?: 'instagram' | 'youtube';
+  /** URL de YouTube ya puesta (viene de «Pegar reel» con un enlace de YouTube). */
+  initialUrl?: string;
   /** Sin API key no se puede analizar: el aviso lleva a Ajustes. */
   onGoSettings: () => void;
   /** Aviso con el que se entra (p. ej. los reels que acaba de traer un enlace). */
@@ -90,7 +93,7 @@ export function ImportView({
 }) {
   const [mode, setMode] = useState<Mode>(startTab ?? 'video');
   const [file, setFile] = useState<File | null>(null);
-  const [url, setUrl] = useState('');
+  const [url, setUrl] = useState(initialUrl ?? '');
   const [igUrl, setIgUrl] = useState('');
   const [text, setText] = useState('');
   const [stage, setStage] = useState<Stage | null>(null);

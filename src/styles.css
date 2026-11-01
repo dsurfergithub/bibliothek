@@ -984,3 +984,28 @@ a.btn { text-decoration: none; }
 }
 
 .insights-settings { margin-top: 8px; }
+
+/* ---------- Pegar reel: captura rápida desde el portapapeles ---------- */
+
+.quick-capture {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 8px 8px 14px; margin-bottom: 16px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+}
+.quick-capture.destacada {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 9%, var(--bg-raised));
+}
+.qc-text { flex: 1; min-width: 0; font-size: 13.5px; color: var(--text-dim); line-height: 1.35; }
+.quick-capture.destacada .qc-text { color: var(--text); }
+.qc-btn { flex: none; min-height: 40px; }
+.qc-close {
+  flex: none; width: 36px; height: 36px; display: grid; place-items: center;
+  background: none; border: none; color: var(--text-faint); border-radius: var(--radius-xs);
+}
+.qc-close:hover { color: var(--text); }
+.quick-capture.done { padding-block: 10px; }
+.quick-capture.done.ok { border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); }
+.quick-capture.done.ok .qc-text { color: var(--text); }
+.quick-capture.done.error .qc-text { color: var(--danger); }

@@ -16,12 +16,13 @@ import { Settings } from './ui/Settings';
 import { Atlas, type AtlasTab } from './ui/Atlas';
 import { buildGraph } from './services/graph';
 import { Deck } from './ui/Deck';
+import { canPaste, QuickCapture } from './ui/QuickCapture';
 import { IconAdd, IconChart, IconCompass, IconDice, IconLibrary, IconSettings } from './ui/icons';
 
 type View =
   | { name: 'library' }
   | { name: 'practice' }
-  | { name: 'import'; startTab?: 'instagram'; aviso?: string; nonce?: number }
+  | { name: 'import'; startTab?: 'instagram' | 'youtube'; url?: string; aviso?: string; nonce?: number }
   /** `back`: a dónde volver al cerrar la ficha (por defecto, la biblioteca). */
   | { name: 'card'; id: string; back?: View }
   | { name: 'atlas'; tab: AtlasTab; sel: string | null }
@@ -40,6 +41,13 @@ export default function App() {
   const [libFilters, setLibFilters] = useState<LibraryFilters>(NO_FILTERS);
   const libScroll = useRef(0);
   const graph = useMemo(() => buildGraph(cards, links), [cards, links]);
+  /** Al abrir o volver a la app (p. ej. desde Instagram), la barra de «Pegar reel» se destaca. */
+  const [vuelta, setVuelta] = useState(true);
+  useEffect(() => {
+    const onVisible = () => document.visibilityState === 'visible' && setVuelta(true);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   /** Recarga fichas y, de paso, crea los micropasos que falten (fichas antiguas incluidas). */
   const refresh = useCallback(async () => {
@@ -166,7 +174,12 @@ export default function App() {
     if (!shared) return;
     history.replaceState(null, '', location.pathname);
     const added = enqueue(shared);
-    setView({ name: 'import', startTab: 'instagram' });
+    setView({
+      name: 'import',
+      startTab: 'instagram',
+      nonce: Date.now(),
+      aviso: added ? 'Reel guardado en la cola.' : undefined,
+    });
     if (!added) {
       setTimeout(() => alert('No se encontró un reel de Instagram en lo compartido (o ya estaba en la cola).'), 0);
     }
@@ -204,6 +217,16 @@ export default function App() {
       </header>
 
       <main className="main">
+        {canPaste() &&
+          (view.name === 'library' || (vuelta && ['practice', 'atlas', 'insights'].includes(view.name))) && (
+            <QuickCapture
+              cards={cards}
+              destacada={vuelta}
+              onDismiss={() => setVuelta(false)}
+              onQueued={() => undefined}
+              onYoutube={(url) => setView({ name: 'import', startTab: 'youtube', url, nonce: Date.now() })}
+            />
+          )}
         {view.name === 'library' && (
           <Library
             cards={cards}
@@ -226,6 +249,7 @@ export default function App() {
           <ImportView
             key={view.nonce ?? 'import'}
             startTab={view.startTab}
+            initialUrl={view.url}
             initialNotice={view.aviso}
             onGoSettings={() => setView({ name: 'settings' })}
             onSaved={(card) => {
