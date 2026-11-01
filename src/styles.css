@@ -98,7 +98,17 @@ button { font: inherit; cursor: pointer; color: inherit; }
 
 .app-header {
   display: flex; align-items: center; gap: 11px;
-  padding: 13px 20px;
+  /*
+   * En el iPhone instalado como app, la página se dibuja DEBAJO de la barra de
+   * estado (black-translucent + viewport-fit=cover). Sin reservar ese hueco,
+   * la cabecera —y el botón de Ajustes— quedaba tapada por la hora y la isla
+   * dinámica, imposible de tocar.
+   */
+  padding:
+    calc(13px + env(safe-area-inset-top))
+    calc(20px + env(safe-area-inset-right))
+    13px
+    calc(20px + env(safe-area-inset-left));
   border-bottom: 1px solid var(--border);
   position: sticky; top: 0; z-index: var(--z-sticky);
   background: color-mix(in srgb, var(--bg) 86%, transparent);
@@ -602,7 +612,7 @@ main.main {
 /* ---------- onboarding ---------- */
 
 .onboarding {
-  max-width: 440px; margin: 0 auto; padding: 52px 24px;
+  max-width: 440px; margin: 0 auto; padding: calc(52px + env(safe-area-inset-top)) 24px 52px;
   display: flex; flex-direction: column; align-items: center; text-align: center;
 }
 .onboarding .logo { width: 78px; height: 78px; margin-bottom: 18px; }
@@ -697,8 +707,8 @@ main.main {
 
 .header-btn {
   margin-left: auto; flex: none;
-  width: 40px; height: 40px; border-radius: var(--radius-sm);
-  background: none; border: 1px solid transparent; color: var(--text-faint);
+  width: 44px; height: 44px; margin-right: -6px; border-radius: var(--radius-sm);
+  background: none; border: 1px solid transparent; color: var(--text-dim);
   display: grid; place-items: center;
   transition: color var(--fast) var(--ease), background var(--fast) var(--ease);
 }
@@ -972,3 +982,5 @@ a.btn { text-decoration: none; }
   .atlas > .atlas-panel { grid-column: 2; margin-top: 50px; position: sticky; top: 80px; max-height: calc(100vh - 100px); overflow-y: auto; }
   .atlas > .atlas-island { grid-column: 1; }
 }
+
+.insights-settings { margin-top: 8px; }

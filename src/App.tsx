@@ -281,6 +281,7 @@ export default function App() {
             steps={steps}
             onOpenCard={(id) => setView({ name: 'card', id })}
             onPractice={() => setView({ name: 'practice' })}
+            onSettings={() => setView({ name: 'settings' })}
           />
         )}
         {view.name === 'settings' && <Settings onLibraryChanged={() => void refresh()} />}

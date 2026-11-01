@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { KnowledgeCard, StepRecord } from '../domain/types';
 import { listShares } from '../services/stats';
 import { appliedCritique, appliedStats } from '../services/analytics';
-import { IconBolt, IconChevron, IconDice, SourceIcon } from './icons';
+import { IconBolt, IconChevron, IconDice, IconSettings, SourceIcon } from './icons';
 
 /**
  * Insights, en dos mitades que responden a dos preguntas distintas:
@@ -72,11 +72,14 @@ export function Insights({
   steps,
   onOpenCard,
   onPractice,
+  onSettings,
 }: {
   cards: KnowledgeCard[];
   steps: StepRecord[];
   onOpenCard: (id: string) => void;
   onPractice: () => void;
+  /** Segundo acceso a Ajustes, además del botón de la cabecera. */
+  onSettings: () => void;
 }) {
   const [vista, setVista] = useState<'aplicado' | 'guardado'>('aplicado');
 
@@ -88,6 +91,9 @@ export function Insights({
           Cuando añadas fichas, aquí verás qué tipo de conocimiento guardas y —lo que de verdad importa— cuánto de eso
           llegas a aplicar.
         </p>
+        <button className="btn ghost insights-settings" onClick={onSettings}>
+          <IconSettings size={16} /> Ajustes, sincronización y copias
+        </button>
       </div>
     );
   }
@@ -110,6 +116,9 @@ export function Insights({
       ) : (
         <Guardado cards={cards} />
       )}
+      <button className="btn ghost insights-settings" onClick={onSettings}>
+        <IconSettings size={16} /> Ajustes, sincronización y copias
+      </button>
     </div>
   );
 }
