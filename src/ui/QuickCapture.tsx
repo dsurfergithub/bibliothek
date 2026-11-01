@@ -5,6 +5,29 @@ import { IconAdd, IconClose } from './icons';
 
 const YT = /https?:\/\/(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?[^\s]*v=|shorts\/)|youtu\.be\/)[\w-]{11}[^\s]*/;
 
+/**
+ * Lee lo copiado en todos sus formatos de texto. Instagram, en el iPhone, copia
+ * el enlace como URL (`text/uri-list`) y no como texto plano: `readText()` lo
+ * devuelve vacío. Por eso se mira cada formato con `read()` y solo si eso no
+ * existe o falla se cae a `readText()`.
+ */
+async function leerPortapapeles(): Promise<string> {
+  const textos: string[] = [];
+  if (navigator.clipboard.read) {
+    try {
+      for (const item of await navigator.clipboard.read()) {
+        for (const tipo of ['text/plain', 'text/uri-list', 'text/html']) {
+          if (item.types.includes(tipo)) textos.push(await (await item.getType(tipo)).text());
+        }
+      }
+      if (textos.join('').trim()) return textos.join('\n');
+    } catch {
+      // Sigue con readText.
+    }
+  }
+  return navigator.clipboard.readText();
+}
+
 /** ¿Este navegador deja leer el portapapeles con un toque? */
 export const canPaste = () => typeof navigator !== 'undefined' && !!navigator.clipboard?.readText;
 
@@ -35,9 +58,11 @@ export function QuickCapture({
   onYoutube: (url: string) => void;
 }) {
   const [msg, setMsg] = useState<{ kind: 'ok' | 'info' | 'error'; text: string } | null>(null);
+  /** Si leer el portapapeles no funciona, un campo donde pegar a mano (mantener pulsado → Pegar). */
+  const [manual, setManual] = useState(false);
 
   useEffect(() => {
-    if (!msg) return;
+    if (!msg || msg.kind === 'error') return;
     const t = setTimeout(() => setMsg(null), 6000);
     return () => clearTimeout(t);
   }, [msg]);
@@ -45,11 +70,19 @@ export function QuickCapture({
   async function pegar() {
     let text = '';
     try {
-      text = (await navigator.clipboard.readText()).trim();
+      text = (await leerPortapapeles()).trim();
     } catch {
-      setMsg({ kind: 'error', text: 'No se pudo leer lo copiado. Pega el enlace a mano en Añadir → Instagram.' });
+      text = '';
+    }
+    if (!text) {
+      // iOS no lo ha dado (permiso denegado o un formato que no expone): pegar a mano siempre funciona.
+      setManual(true);
       return;
     }
+    procesar(text);
+  }
+
+  function procesar(text: string) {
     const reels = extractAllInstagramUrls(text);
     if (reels.length > 0) {
       const fichados = new Set(
@@ -58,6 +91,7 @@ export function QuickCapture({
       const yaFicha = reels.filter((u) => fichados.has(shortcodeOf(u)));
       const nuevos = reels.filter((u) => !fichados.has(shortcodeOf(u)));
       const n = nuevos.length ? enqueueMany(nuevos.join('\n')) : 0;
+      setManual(false);
       onDismiss();
       if (n > 0) {
         onQueued();
@@ -75,6 +109,7 @@ export function QuickCapture({
     }
     const yt = YT.exec(text);
     if (yt) {
+      setManual(false);
       onDismiss();
       onYoutube(yt[0]);
       return;
@@ -85,6 +120,38 @@ export function QuickCapture({
         ? 'Lo copiado no es un enlace de Instagram ni de YouTube.'
         : 'No hay nada copiado. En Instagram: Compartir → Copiar enlace.',
     });
+  }
+
+  if (manual) {
+    return (
+      <div className="quick-capture manual">
+        <label className="qc-text" htmlFor="qc-manual">
+          No he podido leer lo copiado. Mantén pulsado el campo y elige <strong>Pegar</strong>:
+        </label>
+        <div className="qc-manual-row">
+          <input
+            id="qc-manual"
+            className="input"
+            type="url"
+            inputMode="url"
+            placeholder="https://www.instagram.com/reel/…"
+            autoFocus
+            onChange={(e) => e.target.value.trim() && procesar(e.target.value.trim())}
+          />
+          <button
+            className="qc-close"
+            onClick={() => {
+              setManual(false);
+              setMsg(null);
+            }}
+            aria-label="Cancelar"
+          >
+            <IconClose size={15} />
+          </button>
+        </div>
+        {msg && <p className={`qc-manual-msg ${msg.kind}`}>{msg.text}</p>}
+      </div>
+    );
   }
 
   if (msg) {

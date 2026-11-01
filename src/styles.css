@@ -1009,3 +1009,8 @@ a.btn { text-decoration: none; }
 .quick-capture.done.ok { border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); }
 .quick-capture.done.ok .qc-text { color: var(--text); }
 .quick-capture.done.error .qc-text { color: var(--danger); }
+.quick-capture.manual { flex-direction: column; align-items: stretch; gap: 8px; padding: 12px; }
+.qc-manual-row { display: flex; gap: 6px; align-items: center; }
+.qc-manual-row .input { flex: 1; min-width: 0; }
+.qc-manual-msg { margin: 0; font-size: 13px; color: var(--text-dim); }
+.qc-manual-msg.error { color: var(--danger); }
