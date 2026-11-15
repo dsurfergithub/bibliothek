@@ -6,6 +6,15 @@ Bibliotheke convierte Reels, vídeos de YouTube y textos en **fichas de conocimi
 
 Y, sobre todo, **te ayuda a aplicarlas**: cada ficha trae de uno a cinco micropasos y la app lleva la cuenta de cuáles has dado. El **Atlas** te enseña además qué conecta con qué: herramientas, métodos y conceptos que comparten tus fichas.
 
+## Prueba: reels desde el móvil, sin PC
+
+Hay una integración opcional con un extractor remoto autenticado. Permite pegar
+un reel y generar la ficha en el mismo móvil, manteniendo el análisis con tu
+clave de Gemini. La biblioteca sigue en el dispositivo. El servicio descarga
+el vídeo temporalmente y no recibe la clave de Gemini ni cookies de Instagram.
+
+**[Configurar y probar el flujo móvil](companion/MOBILE-PROOF.md)**.
+
 ## Cómo funciona
 
 ```
@@ -53,9 +62,9 @@ Todo se calcula en el dispositivo con lo que el análisis ya extrajo: abrir el m
 
 ## Privacidad por diseño
 
-- **Tu API key, tu cuota**: la app pide tu clave de Gemini al iniciarse ([consíguela gratis aquí](https://aistudio.google.com/apikey)). Se guarda solo en tu dispositivo y solo viaja a la API de Google. No hay backend, no hay cuentas, no hay claves embebidas.
+- **Tu API key, tu cuota**: la app pide tu clave de Gemini al iniciarse ([consíguela gratis aquí](https://aistudio.google.com/apikey)). Se guarda solo en tu dispositivo y solo viaja a la API de Google. No hay claves embebidas. El extractor remoto es opcional y no recibe tu API key.
 - **Sin clave también se entra**: para consultar la biblioteca, usar el Atlas o restaurar una copia no hace falta API key; solo se pide al analizar algo nuevo.
-- **Tus datos, tu dispositivo**: la biblioteca vive en IndexedDB local. Ningún dato sale de tu dispositivo salvo que tú lo lleves con un enlace o una copia de seguridad.
+- **Tus datos, tu dispositivo**: la biblioteca vive en IndexedDB local. Al analizar, el contenido se envía a Gemini. Si activas el extractor remoto, este recibe el enlace y descarga temporalmente el vídeo. Las fichas se quedan en tu dispositivo salvo que las exportes.
 
 ## Pasar tus fichas entre móvil y PC
 
@@ -100,7 +109,7 @@ npm run preview  # servir el build
 
 Stack: **React 19 + TypeScript + Vite**, `@google/genai` (SDK oficial de Gemini), `idb` (IndexedDB) y PWA instalable (manifest + service worker). Sin más dependencias.
 
-Despliegue: es un sitio 100% estático — sirve `dist/` en Vercel, Netlify, GitHub Pages o cualquier hosting. Sin backend.
+Despliegue: es un sitio 100% estático — sirve `dist/` en Vercel, Netlify, GitHub Pages o cualquier hosting. El extractor remoto opcional se despliega por separado (ver la guía móvil).
 
 ## Arquitectura
 

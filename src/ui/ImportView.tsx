@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { analyze, humanizeError, STAGE_LABELS, type AnalysisInput, type Stage } from '../services/analyzer';
 import { getApiKey, getModel } from '../services/apiKey';
-import { companionOnline } from '../services/companion';
+import { companionOnline, remoteExtractor } from '../services/companion';
 import { listCards, saveCard } from '../services/db';
 import { buildSyncLink, loadSnapshot } from '../services/sync';
 import { shareOrCopyLink } from '../services/share';
@@ -115,6 +115,7 @@ export function ImportView({
   const [returnLink, setReturnLink] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
+  const remote = remoteExtractor();
   const busy = stage !== null;
   const refreshQueue = () => setQueue(listQueue());
 
@@ -355,7 +356,7 @@ export function ImportView({
     return (
       <div className="card">
         <h2 className="card-h">Analizando…</h2>
-        <p className="hint">Gemini está destilando el conocimiento. Suele tardar menos de un minuto.</p>
+        <p className="hint">Gemini está destilando el conocimiento. Mantén la app abierta hasta que aparezca la ficha.</p>
         <ul className="stages">
           {visibleStages.map((s, i) => (
             <li key={s} className={i < currentIdx ? 'done' : i === currentIdx ? 'current' : ''}>
@@ -495,7 +496,7 @@ export function ImportView({
           {companion === true && (
             <>
               <p className="hint" style={{ marginBottom: 10 }}>
-Compañero detectado en este equipo: puedes analizar el reel ahora mismo.
+                {remote ? 'Servicio conectado: puedes analizar el reel desde el móvil, sin PC.' : 'Compañero detectado en este equipo: puedes analizar el reel ahora mismo.'}
               </p>
               <div className="settings-row">
                 <button className="btn primary" disabled={!igValid || !hasKey} onClick={analyzeNow}>
@@ -511,10 +512,10 @@ Compañero detectado en este equipo: puedes analizar el reel ahora mismo.
           {companion === false && (
             <>
               <div className="info-box">
-                <strong>Este dispositivo no puede descargar de Instagram por sí solo</strong> (ni el
-                móvil, ni un PC sin el compañero en marcha). Guarda el reel en la cola y procésalo
-                luego en tu PC con el compañero abierto — o descárgalo tú y súbelo en la pestaña
-                <strong>Vídeo</strong>, que no necesita nada extra.
+                {remote ? 'No se pudo conectar con el servicio de descarga. Revisa la dirección y la clave de acceso en Ajustes.'
+                  : 'Para analizar un enlace desde el móvil, conecta el servicio de descarga en Ajustes.'}
+                {' '}Puedes guardar el reel en la cola o subir el archivo desde la pestaña <strong>Vídeo</strong>.
+                <button className="btn" style={{ marginTop: 10 }} onClick={onGoSettings}>Configurar servicio</button>
               </div>
               <div className="settings-row" style={{ marginTop: 10 }}>
                 <button className="btn primary" disabled={!igValid} onClick={addToQueue}>
@@ -559,7 +560,7 @@ Compañero detectado en este equipo: puedes analizar el reel ahora mismo.
 
           {companion === null && (
             <p className="hint">
-              {rechecking ? 'Comprobando de nuevo…' : 'Buscando el compañero local…'}
+              {rechecking ? 'Comprobando de nuevo…' : remote ? 'Conectando con el servicio de descarga…' : 'Buscando el compañero local…'}
             </p>
           )}
 
@@ -579,7 +580,7 @@ Compañero detectado en este equipo: puedes analizar el reel ahora mismo.
                   ))}
                 </ul>
               )}
-              {batchResult.ok > 0 && (
+              {batchResult.ok > 0 && !remote && (
                 <button className="btn" style={{ marginTop: 10 }} onClick={devolverAlMovil}>
                   <IconShare size={16} /> Devolver {batchResult.ok} ficha{batchResult.ok === 1 ? '' : 's'} al móvil
                 </button>
@@ -607,7 +608,7 @@ Compañero detectado en este equipo: puedes analizar el reel ahora mismo.
               </ul>
               {companion === true ? (
                 <button className="btn primary" style={{ marginTop: 12 }} onClick={processQueue} disabled={!hasKey}>
-                  <IconBolt size={17} /> Procesar {queue.length} reel(s) en este PC
+                  <IconBolt size={17} /> Procesar {queue.length} reel(s) {remote ? 'en este móvil' : 'en este equipo'}
                 </button>
               ) : (
                 <>

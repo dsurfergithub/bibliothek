@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: bibliotheke-extractor
+    runtime: docker
+    plan: free
+    autoDeployTrigger: off
+    dockerfilePath: ./companion/Dockerfile
+    dockerContext: ./companion
+    healthCheckPath: /ready
+    envVars:
+      - key: EXTRACTOR_TOKEN
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        sync: false
