@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { getExtractorConfig, setExtractorConfig, validateExtractorConfig, checkExtractor } from '../services/companion';
 import { getApiKey, getModel, MODELS, setApiKey, setModel, validateApiKey } from '../services/apiKey';
 import { clearAll, emptyTrash, listTrash, restoreCard, type TrashEntry } from '../services/db';
 import { downloadText } from '../services/exporters';
@@ -21,6 +22,25 @@ const DIA = 86_400_000;
 
 export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void }) {
   const [key, setKey] = useState('');
+  const [extractorUrl, setExtractorUrl] = useState(() => getExtractorConfig().url);
+  const [extractorToken, setExtractorToken] = useState(() => getExtractorConfig().token);
+  const [extractorBusy, setExtractorBusy] = useState(false);
+  const [extractorMsg, setExtractorMsg] = useState<string | null>(null);
+
+  async function connectExtractor() {
+    setExtractorBusy(true);
+    setExtractorMsg(null);
+    try {
+      const next = validateExtractorConfig(extractorUrl, extractorToken);
+      await checkExtractor(next);
+      setExtractorConfig(next.url, next.token);
+      setExtractorMsg(next.url ? 'Servicio conectado. Ya puedes analizar reels desde este móvil.' : 'Compañero local conectado.');
+    } catch (err) {
+      setExtractorMsg(err instanceof Error && !/fetch|network/i.test(err.message)
+        ? err.message : 'No se pudo conectar. Revisa la dirección, la clave y que el servicio permita esta app.');
+    } finally { setExtractorBusy(false); }
+  }
+
   const [model, setModelState] = useState(getModel());
   const [msg, setMsg] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [linkOut, setLinkOut] = useState<string | null>(null);
@@ -266,6 +286,33 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
       </div>
 
       <div className="settings-section card">
+        <h2>Reels sin PC · prueba</h2>
+        <p className="hint">
+          Conecta tu servicio de descarga para pegar un enlace de Instagram y analizarlo aquí.
+          El servicio recibe el enlace y descarga temporalmente el vídeo; tu clave de Gemini
+          se envía solo a Google. La clave de acceso se guarda en este dispositivo y no viaja en las copias.
+        </p>
+        <label htmlFor="extractor-url">Dirección del servicio</label>
+        <input id="extractor-url" className="input" type="url" placeholder="https://tu-extractor.onrender.com"
+          autoCapitalize="none" autoCorrect="off" value={extractorUrl} onChange={e => setExtractorUrl(e.target.value)} />
+        <label htmlFor="extractor-token">Clave de acceso del servicio</label>
+        <input id="extractor-token" className="input" type="password" autoComplete="off"
+          value={extractorToken} onChange={e => setExtractorToken(e.target.value)} />
+        <div className="settings-row" style={{ marginTop: 10 }}>
+          <button className="btn primary" disabled={extractorBusy} onClick={connectExtractor}>
+            {extractorBusy ? 'Conectando…' : 'Guardar y comprobar'}
+          </button>
+          <button className="btn" disabled={extractorBusy} onClick={() => {
+            setExtractorConfig('', ''); setExtractorUrl(''); setExtractorToken('');
+            setExtractorMsg('Servicio remoto desactivado. Puedes seguir subiendo vídeos desde tu galería.');
+          }}>Desconectar servicio</button>
+        </div>
+        {extractorMsg && <p role="status" className="hint">{extractorMsg}</p>}
+        <p className="hint">Durante esta prueba, mantén la app abierta hasta que aparezca la ficha.
+          Si Instagram bloquea una descarga, podrás subir el vídeo desde tu galería.</p>
+      </div>
+
+      <div className="settings-section card">
         <h2>Modelo</h2>
         <select
           className="select"
@@ -424,7 +471,7 @@ export function Settings({ onLibraryChanged }: { onLibraryChanged: () => void })
         <p className="hint" style={{ margin: 0 }}>
           <strong>Bibliotheke</strong> · «No guardes contenido. Guarda conocimiento.» Convierte
           Reels, vídeos de YouTube y textos en fichas de conocimiento estructurado con Gemini.
-          100% local: sin servidores, sin cuentas, tu clave y tus datos no salen de aquí.
+          Biblioteca guardada en este dispositivo. El análisis usa Gemini; si activas el servicio remoto, este descarga temporalmente los reels.
         </p>
       </div>
     </div>

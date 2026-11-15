@@ -156,7 +156,7 @@ export default function App() {
         nonce: Date.now(),
         aviso:
           n > 0
-            ? `${n} reel${n === 1 ? '' : 's'} añadido${n === 1 ? '' : 's'} a la cola. Con el compañero abierto ya puedes procesarlos.`
+            ? `${n} reel${n === 1 ? '' : 's'} añadido${n === 1 ? '' : 's'} a la cola. Puedes procesarlos en Añadir cuando el servicio de descarga esté conectado.`
             : 'Ese enlace no traía reels nuevos: ya estaban todos en la cola.',
       });
     }
